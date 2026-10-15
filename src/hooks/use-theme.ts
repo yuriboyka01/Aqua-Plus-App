@@ -4,11 +4,9 @@
  */
 
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
-
-  return Colors[theme];
+  // Official Aqua Plus RO Tech brand palette (aquaplusrotech.shop)
+  // Light theme with clean white surfaces, #F8FAFC background, #0F172A slate text
+  return Colors.light;
 }
