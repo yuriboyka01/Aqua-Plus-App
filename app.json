@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "aquapplus-service",
-    "slug": "aquapplus-service",
+    "name": "Aqua Plus",
+    "slug": "aqua-plus",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "aquapplusservice",
+    "scheme": "aquaplus",
     "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon"
