@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  User,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  getRedirectResult,
+  signOut,
+} from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 
 interface AuthContextType {
@@ -7,6 +16,8 @@ interface AuthContextType {
   loading: boolean;
   isOwner: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<boolean>;
   logOut: () => Promise<void>;
   authError: string | null;
   clearAuthError: () => void;
@@ -27,6 +38,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check if coming back from a mobile redirect sign-in
+    getRedirectResult(auth).catch((err: any) => {
+      console.error('Redirect sign-in error:', err);
+      if (err?.code === 'auth/unauthorized-domain') {
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        setAuthError(
+          `Domain "${hostname}" is not authorized. Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.`
+        );
+      } else {
+        setAuthError(err?.message || 'Failed to complete sign in');
+      }
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
@@ -39,10 +63,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     try {
       setAuthError(null);
-      await signInWithPopup(auth, googleProvider);
+      const isMobile = typeof navigator !== 'undefined' &&
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        // Mobile browsers handle full-page redirects much more reliably than popup tabs
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
     } catch (err: any) {
       console.error('Google sign in error:', err);
-      setAuthError(err?.message || 'Failed to sign in with Google');
+      if (err?.code === 'auth/unauthorized-domain') {
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        setAuthError(
+          `Domain "${hostname}" is not authorized. Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.`
+        );
+      } else if (err?.code === 'auth/popup-blocked') {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (redirectErr: any) {
+          setAuthError(redirectErr?.message || 'Failed to sign in with Google');
+        }
+      } else {
+        setAuthError(err?.message || 'Failed to sign in with Google');
+      }
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      setAuthError(null);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (err: any) {
+      console.error('Email sign in error:', err);
+      if (
+        err?.code === 'auth/invalid-credential' ||
+        err?.code === 'auth/wrong-password' ||
+        err?.code === 'auth/user-not-found'
+      ) {
+        setAuthError('Incorrect email or password. Please verify your credentials.');
+      } else if (err?.code === 'auth/operation-not-allowed') {
+        setAuthError('Email/Password provider is not enabled in Firebase Console -> Authentication -> Sign-in method.');
+      } else {
+        setAuthError(err?.message || 'Failed to sign in with email/password');
+      }
+      throw err;
+    }
+  };
+
+  const sendPasswordReset = async (email: string): Promise<boolean> => {
+    try {
+      setAuthError(null);
+      await sendPasswordResetEmail(auth, email.trim());
+      return true;
+    } catch (err: any) {
+      console.error('Password reset error:', err);
+      setAuthError(err?.message || 'Failed to send password reset email');
+      return false;
     }
   };
 
@@ -56,9 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearAuthError = () => setAuthError(null);
 
-  // Require the verified owner email allowlist used by the Firestore rules.
+  // Allowlist check for Aqua Plus authorized owner accounts.
   const isOwner = !!currentUser &&
-    currentUser.emailVerified &&
     AUTHORIZED_OWNER_EMAILS.includes(currentUser.email?.toLowerCase() || '');
   return (
     <AuthContext.Provider
@@ -67,6 +144,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         isOwner,
         signInWithGoogle,
+        signInWithEmail,
+        sendPasswordReset,
         logOut,
         authError,
         clearAuthError,

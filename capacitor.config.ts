@@ -5,6 +5,9 @@ const config: CapacitorConfig = {
   appName: 'AquaPlus Service',
   webDir: 'dist',
   plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
     CapacitorUpdater: {
       autoUpdate: true,
       resetWhenUpdate: false,

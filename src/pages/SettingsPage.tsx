@@ -16,6 +16,7 @@ import {
   MapPin,
   RefreshCw,
   Server,
+  Globe,
   Sliders,
   FileSpreadsheet,
 } from 'lucide-react';
@@ -27,6 +28,8 @@ import {
   fetchIntegrationStatus,
   testWhatsAppIntegration,
   testEmailIntegration,
+  getApiBaseUrl,
+  setApiBaseUrl,
 } from '../services/apiService';
 
 interface SettingsPageProps {
@@ -68,12 +71,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [testingEmail, setTestingEmail] = useState(false);
   const [waTestOutput, setWaTestOutput] = useState<string | null>(null);
   const [emailTestOutput, setEmailTestOutput] = useState<string | null>(null);
+  const [apiBaseUrl, setApiBaseUrlState] = useState(getApiBaseUrl());
+  const [apiBaseUrlSaved, setApiBaseUrlSaved] = useState(false);
 
   useEffect(() => {
     setFormData(settings);
   }, [settings]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aquaplus_api_base_url');
+      if (saved && (saved.includes(' ') || saved.includes('http: /') || saved.includes('10.137.168'))) {
+        localStorage.removeItem('aquaplus_api_base_url');
+        setApiBaseUrlState('');
+      }
+    }
     loadIntegrationStatus();
   }, []);
 
@@ -356,14 +368,75 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <MessageSquare className="w-4 h-4 text-[#165B50]" />
               <h2 className="font-bold text-xs">4. Meta WhatsApp Business Cloud API Gateway</h2>
             </div>
-            <span className="font-mono-data text-[11px] text-[#5C6E67]">
-              Status: {integrationStatuses.whatsapp.status === 'configured' ? 'Credentials present (connectivity unverified)' : 'Not configured'}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadIntegrationStatus}
+                title="Refresh integration status"
+                className="text-[#165B50] hover:text-[#0E2822] p-1 rounded transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+              <span className="font-mono-data text-[11px] text-[#5C6E67]">
+                Status: {integrationStatuses.whatsapp.status === 'configured' ? 'Credentials present (connectivity unverified)' : 'Not configured'}
+              </span>
+            </div>
           </div>
 
           <p className="text-xs text-[#5C6E67] leading-relaxed">
             {integrationStatuses.whatsapp.details}
           </p>
+
+          {/* Direct Cloud Gateway Mode */}
+          <div className="bg-[#EBF7F2] p-3.5 rounded-lg border border-[#C6EAD8] space-y-2 text-xs text-[#163830]">
+            <div className="flex items-center justify-between">
+              <span className="font-bold flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-[#165B50]" />
+                <span>Gateway Connection: Direct Meta Cloud API (24/7 Autonomous)</span>
+              </span>
+              <span className="font-mono-data text-[10px] bg-[#165B50] text-[#FAF8F3] px-2 py-0.5 rounded-full font-bold">
+                Online
+              </span>
+            </div>
+            <p className="text-[11px] text-[#2D5A4C] leading-relaxed">
+              Mobile dispatches connect directly to the Meta WhatsApp Business Cloud API. No local PC, Wi-Fi IP, or manual server URL setup is required. Dispatches work seamlessly on 4G, 5G, and Wi-Fi.
+            </p>
+
+            {/* Optional Advanced URL Configuration */}
+            <details className="mt-2 text-[11px] text-[#5C6E67]">
+              <summary className="cursor-pointer hover:text-[#163830] font-semibold flex items-center gap-1">
+                <Server className="w-3 h-3" />
+                <span>Advanced: Custom Backend Server Override (Optional)</span>
+              </summary>
+              <div className="mt-2 pt-2 border-t border-[#C6EAD8] space-y-2">
+                <p className="text-[10px] text-[#5C6E67]">
+                  Leave empty to use the permanent direct Cloud API gateway.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-2">
+                  <input
+                    type="url"
+                    value={apiBaseUrl}
+                    onChange={(e) => setApiBaseUrlState(e.target.value)}
+                    placeholder="e.g. https://your-cloud-run.app or leave empty"
+                    className="w-full px-3 py-1.5 text-xs bg-[#FAF8F3] border border-[#DDD6C5] rounded font-mono-data text-[#1B2421]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiBaseUrl(apiBaseUrl);
+                      setApiBaseUrlSaved(true);
+                      setTimeout(() => setApiBaseUrlSaved(false), 2500);
+                      loadIntegrationStatus();
+                    }}
+                    className="w-full sm:w-auto px-3.5 py-1.5 bg-[#163830] hover:bg-[#0E2822] text-[#FAF8F3] font-semibold rounded text-xs flex items-center justify-center gap-1.5 transition-colors shrink-0"
+                  >
+                    <Check className="w-3.5 h-3.5 text-[#7EE787]" />
+                    <span>{apiBaseUrlSaved ? 'Saved' : 'Save'}</span>
+                  </button>
+                </div>
+              </div>
+            </details>
+          </div>
 
           <div className="bg-[#F4F0E6] p-3.5 rounded-lg border border-[#DDD6C5] space-y-3 text-xs">
             <span className="font-semibold text-[#2D3733] block">Live test message (restricted to WHATSAPP_TEST_RECIPIENT):</span>

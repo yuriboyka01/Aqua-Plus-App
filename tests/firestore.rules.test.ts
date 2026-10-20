@@ -135,8 +135,8 @@ test('non-allowlisted users cannot read customer records', async () => {
   await assertFails(getDoc(doc(db, 'customers', 'c-real')));
 });
 
-test('allowlisted but unverified accounts cannot read customer records', async () => {
-  await assertFails(getDoc(doc(unverifiedOwnerDb(), 'customers', 'c-real')));
+test('allowlisted accounts can read customer records without email verification', async () => {
+  await assertSucceeds(getDoc(doc(unverifiedOwnerDb(), 'customers', 'c-real')));
 });
 
 test('verified allowlisted owner can read existing business records', async () => {

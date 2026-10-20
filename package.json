@@ -1,7 +1,7 @@
 {
   "name": "aquaplus-service",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.4",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -15,7 +15,8 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-aquaplus-service-os --config firebase.emulator.json \"npm run test:rules:run\"",
     "cap:sync": "npm run build && cap sync android",
     "cap:build": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
-    "cap:open": "cap open android"
+    "cap:open": "cap open android",
+    "ota": "npm run build && npx @capgo/cli bundle upload"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

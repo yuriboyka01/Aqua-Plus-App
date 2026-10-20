@@ -12,7 +12,7 @@ app.disable('x-powered-by');
 
 // Baseline security headers. A Content-Security-Policy is intentionally not set yet:
 // it needs to be tested against Firebase Auth popups and Google Fonts first.
-app.use((_request, response, next) => {
+app.use((request, response, next) => {
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('X-Frame-Options', 'DENY');
   response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -20,6 +20,21 @@ app.use((_request, response, next) => {
   // Firebase signInWithPopup needs the popup to keep a reference to the opener window.
   response.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   if (isProduction) response.setHeader('Strict-Transport-Security', 'max-age=31536000');
+
+  // Handle CORS for Capacitor / mobile and local dev clients
+  const origin = request.headers.origin;
+  if (origin) {
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Access-Control-Allow-Credentials', 'true');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With');
+  }
+
+  if (request.method === 'OPTIONS') {
+    response.status(204).end();
+    return;
+  }
+
   next();
 });
 
@@ -39,6 +54,13 @@ app.use('/api', (request, response, next) => {
 });
 
 app.use(createApiMiddleware());
+
+// Direct download route for the newly compiled Android APK
+app.get('/download/app.apk', (_req, res) => {
+  const apkPath = path.join(projectRoot, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+  res.download(apkPath, 'AquaPlus-Service.apk');
+});
+
 app.use(express.static(path.join(projectRoot, 'dist'), {
   index: false,
   maxAge: '1h',

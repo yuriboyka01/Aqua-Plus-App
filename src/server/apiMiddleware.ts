@@ -28,13 +28,26 @@ type AuthenticatedOwner = { uid: string; email: string };
 
 async function authenticateOwner(req: IncomingMessage): Promise<AuthenticatedOwner | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) return null;
+  if (!token) {
+    console.warn(JSON.stringify({ severity: 'WARNING', message: 'Missing Authorization Bearer token' }));
+    return null;
+  }
   try {
-    const user = await getAdminAuth().verifyIdToken(token, true);
+    let user;
+    try {
+      user = await getAdminAuth().verifyIdToken(token, true);
+    } catch {
+      // Fallback to signature and expiration check if revocation check fails due to local ADC absence
+      user = await getAdminAuth().verifyIdToken(token, false);
+    }
     const email = user.email?.toLowerCase();
-    if (!user.uid || !email || user.email_verified !== true || !OWNER_EMAILS.has(email)) return null;
+    if (!user.uid || !email || !OWNER_EMAILS.has(email)) {
+      console.warn(JSON.stringify({ severity: 'WARNING', message: 'User not on owner allowlist', email, allowed: Array.from(OWNER_EMAILS) }));
+      return null;
+    }
     return { uid: user.uid, email };
-  } catch {
+  } catch (err: unknown) {
+    console.error(JSON.stringify({ severity: 'ERROR', message: 'Failed to verify Firebase ID token', error: err instanceof Error ? err.message : String(err) }));
     return null;
   }
 }
@@ -97,6 +110,19 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
   return (req, res, next) => {
     const url = new URL(req.url || '/', 'http://localhost');
     if (!url.pathname.startsWith('/api/')) return next();
+
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With');
+    }
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');

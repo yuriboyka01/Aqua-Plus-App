@@ -26,7 +26,6 @@ service cloud.firestore {
 
     function isAuthorizedOwnerAccount() {
       return isSignedIn() &&
-        request.auth.token.email_verified == true &&
         request.auth.token.email in ['nisanth.t9c@gmail.com', 'aquaplusrosales@gmail.com', 'vishaalchinnan@gmail.com'];
     }
 

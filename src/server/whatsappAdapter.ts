@@ -83,26 +83,34 @@ export async function sendWhatsAppTemplateMessage(params: {
     : 'v25.0';
   const endpoint = `https://graph.facebook.com/${graphVersion}/${config.phoneNumberId}/messages`;
 
+  const isHelloWorld = (config.templateName || '').toLowerCase() === 'hello_world';
   const requestPayload = {
     messaging_product: 'whatsapp',
     to: cleanPhone,
     type: 'template',
-    template: {
-      name: config.templateName || 'service_maintenance_reminder',
-      language: {
-        code: params.languageCode || 'en',
-      },
-      components: [
-        {
-          type: 'body',
-          parameters: [
-            { type: 'text', text: params.customerName },
-            { type: 'text', text: params.lastServiceDate },
-            { type: 'text', text: params.businessPhone },
+    template: isHelloWorld
+      ? {
+          name: 'hello_world',
+          language: {
+            code: 'en_US',
+          },
+        }
+      : {
+          name: config.templateName || 'service_maintenance_reminder',
+          language: {
+            code: params.languageCode || 'en_US',
+          },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: params.customerName },
+                { type: 'text', text: params.lastServiceDate },
+                { type: 'text', text: params.businessPhone },
+              ],
+            },
           ],
         },
-      ],
-    },
   };
 
   try {
