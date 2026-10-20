@@ -39,6 +39,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
   const [defaultIntervalDays, setDefaultIntervalDays] = useState(90);
   const [customerNotes, setCustomerNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [duplicateWarningDismissed, setDuplicateWarningDismissed] = useState(false);
 
   useEffect(() => {
@@ -82,6 +83,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
       setCustomerNotes('');
     }
     setDuplicateWarningDismissed(false);
+    setSaveError(null);
   }, [customerToEdit, isOpen, existingCustomers.length]);
 
   if (!isOpen) return null;
@@ -93,8 +95,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError(null);
     if (!fullName.trim() || !primaryPhone.trim()) {
-      alert('Please provide customer full name and primary phone number.');
+      setSaveError('Please provide customer full name and primary phone number.');
       return;
     }
 
@@ -140,7 +143,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert('Failed to save customer record. Please check details and retry.');
+      const msg = err?.message || 'Failed to save customer record. Please check details and retry.';
+      setSaveError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -169,6 +173,18 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-xs text-[#1B2421]">
+          {/* Error Alert Banner */}
+          {saveError && (
+            <div className="p-4 bg-[#FEE2E2] border border-[#FCA5A5] rounded-xl text-[#991B1B] space-y-1">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Failed to Save Customer</p>
+                  <p className="text-[11px] leading-relaxed break-words">{saveError}</p>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Duplicate Phone Notice */}
           {duplicateMatch && (
             <div className="p-4 bg-[#FFF5E6] border border-[#F6D285] rounded-xl text-[#8C4A00] space-y-2">

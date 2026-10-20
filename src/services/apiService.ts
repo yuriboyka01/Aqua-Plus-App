@@ -1,6 +1,8 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { auth, db } from '../lib/firebase';
-import { doc, getDoc, addDoc, collection, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { recordMessageAttempt } from './dbService';
+import { BUSINESS_OWNER_ID } from '../lib/constants';
 
 const API_BASE_URL_STORAGE_KEY = 'aquaplus_api_base_url';
 
@@ -232,13 +234,23 @@ export async function testWhatsAppIntegration(phone: string, customerName: strin
   error?: string;
   providerMessageId?: string;
 }> {
-  // 1. Try backend API if URL is configured or web client
+  // On native mobile app, always dispatch directly via Meta Cloud API using Capacitor native HTTP
+  if (Capacitor.isNativePlatform()) {
+    return await sendViaMetaCloudDirect(phone);
+  }
+
+  // On web, try backend server if available, falling back gracefully to direct dispatch
   const backendBase = getApiBaseUrl();
   const isLocalWeb = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   if (backendBase || isLocalWeb) {
     try {
-      const token = await auth.currentUser?.getIdToken();
+      let token: string | undefined;
+      try {
+        token = await auth.currentUser?.getIdToken();
+      } catch {
+        // Token refresh error (e.g. securetoken API disabled); proceed to direct dispatch
+      }
       const url = resolveApiUrl('/api/whatsapp/test');
       const res = await fetch(url, {
         method: 'POST',
@@ -258,20 +270,24 @@ export async function testWhatsAppIntegration(phone: string, customerName: strin
     }
   }
 
-  // 2. Permanent Direct Cloud Gateway Fallback
+  // Permanent Direct Cloud Gateway Fallback
   return await sendViaMetaCloudDirect(phone);
 }
 
 export async function sendWhatsAppReminder(customerId: string, reminderId: string): Promise<{
   success: boolean; status: string; providerMessageId?: string; error?: string;
 }> {
-  // 1. Try backend server if available
+  // On native mobile app, dispatch directly via Meta Cloud API
+  const isNative = Capacitor.isNativePlatform();
   const backendBase = getApiBaseUrl();
   const isLocalWeb = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-  if (backendBase || isLocalWeb) {
+  if (!isNative && (backendBase || isLocalWeb)) {
     try {
-      const token = await auth.currentUser?.getIdToken();
+      let token: string | undefined;
+      try {
+        token = await auth.currentUser?.getIdToken();
+      } catch {}
       const url = resolveApiUrl('/api/whatsapp/send-reminder');
       const response = await fetch(url, {
         method: 'POST',
@@ -291,7 +307,7 @@ export async function sendWhatsAppReminder(customerId: string, reminderId: strin
     }
   }
 
-  // 2. Direct Client Dispatch with Firestore persistence
+  // Direct Client Dispatch with Firestore persistence
   try {
     const [custDoc, remDoc] = await Promise.all([
       getDoc(doc(db, 'customers', customerId)),
@@ -307,18 +323,20 @@ export async function sendWhatsAppReminder(customerId: string, reminderId: strin
     const attemptedAt = new Date().toISOString();
 
     if (res.success) {
-      await addDoc(collection(db, 'messageAttempts'), {
+      await recordMessageAttempt({
         customerId,
         customerName: customer.fullName || '',
         customerPhone: customer.primaryPhone || '',
         reminderId,
+        idempotencyKey: `${customerId}_${reminderId}_${Date.now()}`,
         provider: 'whatsapp_cloud_api',
         templateName: import.meta.env.VITE_WHATSAPP_TEMPLATE_NAME || 'hello_world',
-        providerMessageId: res.providerMessageId || null,
+        language: 'en',
+        providerMessageId: res.providerMessageId || undefined,
         status: 'success',
         attemptedAt,
-        ownerId: auth.currentUser?.uid || 'direct_client',
-      });
+        ownerId: BUSINESS_OWNER_ID,
+      }, BUSINESS_OWNER_ID);
 
       await updateDoc(doc(db, 'reminders', reminderId), {
         status: 'sent',

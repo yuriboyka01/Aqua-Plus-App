@@ -106,7 +106,7 @@ service cloud.firestore {
     // Collections
     match /customers/{customerId} {
       allow get: if isValidId(customerId) && isOwner(existing().ownerId);
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create: if isValidId(customerId) &&
                       isOwner(incoming().ownerId) &&
                       isValidCustomer(incoming());
@@ -120,7 +120,7 @@ service cloud.firestore {
 
     match /serviceRecords/{serviceRecordId} {
       allow get: if isValidId(serviceRecordId) && isOwner(existing().ownerId);
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create: if isValidId(serviceRecordId) &&
                       isOwner(incoming().ownerId) &&
                       belongsToOwner(incoming().customerId, incoming().ownerId) &&
@@ -137,7 +137,7 @@ service cloud.firestore {
 
     match /reminders/{reminderId} {
       allow get: if isValidId(reminderId) && isOwner(existing().ownerId);
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create: if isValidId(reminderId) &&
                       isOwner(incoming().ownerId) &&
                       belongsToOwner(incoming().customerId, incoming().ownerId) &&
@@ -154,7 +154,7 @@ service cloud.firestore {
 
     match /messageAttempts/{attemptId} {
       allow get: if isValidId(attemptId) && isOwner(existing().ownerId);
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create: if isValidId(attemptId) &&
                       isOwner(incoming().ownerId) &&
                       belongsToOwner(incoming().customerId, incoming().ownerId) &&
@@ -165,13 +165,13 @@ service cloud.firestore {
 
     match /messageDeliveryStatus/{statusId} {
       allow get: if isValidId(statusId) && isOwner(existing().ownerId);
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create, update, delete: if false; // Only the verified server webhook writes delivery status
     }
 
     match /ownerReports/{reportId} {
       allow get: if isValidId(reportId) && isOwner(existing().ownerId);
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create: if isValidId(reportId) &&
                       isOwner(incoming().ownerId) &&
                       isValidOwnerReport(incoming());
@@ -185,7 +185,7 @@ service cloud.firestore {
     match /settings/{settingsId} {
       allow get: if isValidId(settingsId) && isAuthorizedOwnerAccount() &&
         (!exists(/databases/$(database)/documents/settings/$(settingsId)) || isOwner(existing().ownerId));
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create: if isValidId(settingsId) &&
                       isOwner(incoming().ownerId) &&
                       isValidSettings(incoming());
@@ -198,7 +198,7 @@ service cloud.firestore {
 
     match /auditEvents/{eventId} {
       allow get: if isValidId(eventId) && isOwner(existing().ownerId);
-      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow list: if isAuthorizedOwnerAccount();
       allow create: if isValidId(eventId) &&
                       isOwner(incoming().ownerId) &&
                       isValidAuditEvent(incoming());

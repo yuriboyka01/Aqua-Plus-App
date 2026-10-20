@@ -9,9 +9,11 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
@@ -210,3 +212,27 @@ test('a service record must reference an existing customer', async () => {
   const db = ownerDb();
   await assertFails(setDoc(doc(db, 'serviceRecords', 's-ghost'), validServiceRecord('s-ghost', 'missing-customer')));
 });
+
+test('allowlisted owner can list collections without query filters', async () => {
+  const db = unverifiedOwnerDb();
+  await assertSucceeds(getDocs(collection(db, 'customers')));
+  await assertSucceeds(getDocs(collection(db, 'serviceRecords')));
+  await assertSucceeds(getDocs(collection(db, 'reminders')));
+  await assertSucceeds(getDocs(collection(db, 'messageAttempts')));
+  await assertSucceeds(getDocs(collection(db, 'ownerReports')));
+  await assertSucceeds(getDocs(collection(db, 'auditEvents')));
+});
+
+test('unauthenticated or non-allowlisted clients cannot list collections', async () => {
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDocs(collection(unauthDb, 'customers')));
+  await assertFails(getDocs(collection(unauthDb, 'serviceRecords')));
+
+  const attackerDb = testEnv.authenticatedContext('attacker', {
+    email: 'attacker@example.com',
+    email_verified: true,
+  }).firestore();
+  await assertFails(getDocs(collection(attackerDb, 'customers')));
+  await assertFails(getDocs(collection(attackerDb, 'serviceRecords')));
+});
+

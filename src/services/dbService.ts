@@ -65,6 +65,17 @@ export function subscribeCustomers(
   );
 }
 
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms = 12000,
+  errorMsg = 'Database operation timed out. Please check your network connection or sign in again.'
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms)),
+  ]);
+}
+
 export async function addCustomer(
   data: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>,
   ownerId: string
@@ -82,14 +93,14 @@ export async function addCustomer(
   };
 
   try {
-    await setDoc(doc(db, path, docId), newCustomer);
-    await recordAuditEvent(
+    await withTimeout(setDoc(doc(db, path, docId), newCustomer));
+    recordAuditEvent(
       'CUSTOMER_CREATED',
       `Registered customer ${newCustomer.fullName} (${newCustomer.primaryPhone}) in ${newCustomer.locality}`,
       'Customer',
       docId,
       ownerId
-    );
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
     return docId;
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, `${path}/${docId}`);
@@ -106,17 +117,19 @@ export async function updateCustomer(
   const nowIso = new Date().toISOString();
 
   try {
-    await updateDoc(doc(db, path, customerId), {
-      ...updates,
-      updatedAt: nowIso,
-    });
-    await recordAuditEvent(
+    await withTimeout(
+      updateDoc(doc(db, path, customerId), {
+        ...updates,
+        updatedAt: nowIso,
+      })
+    );
+    recordAuditEvent(
       'CUSTOMER_UPDATED',
       `Updated details for customer ${updates.fullName || customerId}`,
       'Customer',
       customerId,
       ownerId
-    );
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, fullPath);
   }
