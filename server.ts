@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
 import { createApiMiddleware } from './src/server/apiMiddleware';
+import { isAllowedOrigin } from './src/utils/apiUtils';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -23,8 +24,9 @@ app.use((request, response, next) => {
 
   // Handle CORS for Capacitor / mobile and local dev clients
   const origin = request.headers.origin;
-  if (origin) {
+  if (origin && isAllowedOrigin(origin)) {
     response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Vary', 'Origin');
     response.setHeader('Access-Control-Allow-Credentials', 'true');
     response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With');
@@ -96,3 +98,4 @@ process.on('unhandledRejection', (reason) => {
     reason: reason instanceof Error ? reason.message : String(reason),
   }));
 });
+

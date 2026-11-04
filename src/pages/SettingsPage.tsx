@@ -73,6 +73,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [emailTestOutput, setEmailTestOutput] = useState<string | null>(null);
   const [apiBaseUrl, setApiBaseUrlState] = useState(getApiBaseUrl());
   const [apiBaseUrlSaved, setApiBaseUrlSaved] = useState(false);
+  const isNativeShell = typeof window !== 'undefined' && window.location.protocol === 'capacitor:';
+  const apiEndpointMode = apiBaseUrl ? 'Custom backend URL saved' : isNativeShell ? 'Backend URL required' : 'Same-origin API';
 
   useEffect(() => {
     setFormData(settings);
@@ -378,7 +380,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
               <span className="font-mono-data text-[11px] text-[#5C6E67]">
-                Status: {integrationStatuses.whatsapp.status === 'configured' ? 'Credentials present (connectivity unverified)' : 'Not configured'}
+                Status: {integrationStatuses.whatsapp.status === 'configured' ? 'Credentials present (connectivity unverified)' : integrationStatuses.whatsapp.status === 'error' ? 'Backend unavailable' : 'Credentials not configured'}
               </span>
             </div>
           </div>
@@ -387,43 +389,43 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             {integrationStatuses.whatsapp.details}
           </p>
 
-          {/* Direct Cloud Gateway Mode */}
+          {/* All provider requests go through the protected backend; credentials never enter the client bundle. */}
           <div className="bg-[#EBF7F2] p-3.5 rounded-lg border border-[#C6EAD8] space-y-2 text-xs text-[#163830]">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <span className="font-bold flex items-center gap-1.5">
                 <Globe className="w-3.5 h-3.5 text-[#165B50]" />
-                <span>Gateway Connection: Direct Meta Cloud API (24/7 Autonomous)</span>
+                <span>Gateway Connection: Protected AquaPlus API Server</span>
               </span>
-              <span className="font-mono-data text-[10px] bg-[#165B50] text-[#FAF8F3] px-2 py-0.5 rounded-full font-bold">
-                Online
+              <span className="font-mono-data text-[10px] bg-[#F4F0E6] text-[#163830] px-2 py-0.5 rounded-full font-bold shrink-0">
+                {apiEndpointMode}
               </span>
             </div>
             <p className="text-[11px] text-[#2D5A4C] leading-relaxed">
-              Mobile dispatches connect directly to the Meta WhatsApp Business Cloud API. No local PC, Wi-Fi IP, or manual server URL setup is required. Dispatches work seamlessly on 4G, 5G, and Wi-Fi.
+              WhatsApp and email requests are sent through the protected AquaPlus backend. Meta and Resend credentials stay on the server and are never bundled into the web or Android app. Web deployments use the same-origin API. Android builds need the public HTTPS backend URL saved below, or VITE_API_BASE_URL set before building.
             </p>
 
-            {/* Optional Advanced URL Configuration */}
-            <details className="mt-2 text-[11px] text-[#5C6E67]">
+            <details open={isNativeShell && !apiBaseUrl} className="mt-2 text-[11px] text-[#5C6E67]">
               <summary className="cursor-pointer hover:text-[#163830] font-semibold flex items-center gap-1">
                 <Server className="w-3 h-3" />
-                <span>Advanced: Custom Backend Server Override (Optional)</span>
+                <span>Backend API URL (required for Android unless configured at build time)</span>
               </summary>
               <div className="mt-2 pt-2 border-t border-[#C6EAD8] space-y-2">
                 <p className="text-[10px] text-[#5C6E67]">
-                  Leave empty to use the permanent direct Cloud API gateway.
+                  For web deployments served by the backend, leave this blank. In the Android app, enter the public HTTPS URL of the deployed backend. This URL is public configuration, not a secret. Never paste access tokens or API keys here.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center gap-2">
                   <input
                     type="url"
                     value={apiBaseUrl}
                     onChange={(e) => setApiBaseUrlState(e.target.value)}
-                    placeholder="e.g. https://your-cloud-run.app or leave empty"
+                    placeholder="https://your-aquaplus-backend.run.app"
                     className="w-full px-3 py-1.5 text-xs bg-[#FAF8F3] border border-[#DDD6C5] rounded font-mono-data text-[#1B2421]"
                   />
                   <button
                     type="button"
                     onClick={() => {
                       setApiBaseUrl(apiBaseUrl);
+                      setApiBaseUrlState(getApiBaseUrl());
                       setApiBaseUrlSaved(true);
                       setTimeout(() => setApiBaseUrlSaved(false), 2500);
                       loadIntegrationStatus();
@@ -431,7 +433,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     className="w-full sm:w-auto px-3.5 py-1.5 bg-[#163830] hover:bg-[#0E2822] text-[#FAF8F3] font-semibold rounded text-xs flex items-center justify-center gap-1.5 transition-colors shrink-0"
                   >
                     <Check className="w-3.5 h-3.5 text-[#7EE787]" />
-                    <span>{apiBaseUrlSaved ? 'Saved' : 'Save'}</span>
+                    <span>{apiBaseUrlSaved ? 'Saved' : 'Save API URL'}</span>
                   </button>
                 </div>
               </div>
@@ -474,7 +476,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <h2 className="font-bold text-xs">5. Owner Morning Digest & Email Provider</h2>
             </div>
             <span className="font-mono-data text-[11px] text-[#5C6E67]">
-              Status: {integrationStatuses.email.status === 'configured' ? 'Credentials present (connectivity unverified)' : 'Not configured'}
+              Status: {integrationStatuses.email.status === 'configured' ? 'Credentials present (connectivity unverified)' : integrationStatuses.email.status === 'error' ? 'Backend unavailable' : 'Credentials not configured'}
             </span>
           </div>
 

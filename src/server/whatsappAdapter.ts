@@ -31,6 +31,12 @@ export function getWhatsAppConfig(): WhatsAppConfig {
   };
 }
 
+function hasUsableSecret(value: string | undefined, minimumLength: number): boolean {
+  const normalized = value?.trim() || '';
+  return normalized.length >= minimumLength &&
+    !/^(?:MY_|YOUR_|GENERATE_|CHANGE_ME|PLACEHOLDER)/i.test(normalized);
+}
+
 export function getWhatsAppIntegrationStatus(): {
   status: 'not_configured' | 'configured' | 'connected' | 'error';
   details: string;
@@ -45,10 +51,30 @@ export function getWhatsAppIntegrationStatus(): {
     };
   }
 
+  const templateName = (config.templateName || '').trim();
+  if (!templateName || /^hello_world$/i.test(templateName) || /^(?:MY_|YOUR_|GENERATE_)/i.test(templateName)) {
+    return {
+      status: 'not_configured',
+      details: 'Production reminders are disabled because the active WhatsApp template is a test or placeholder template. Configure the approved service reminder template; hello_world remains restricted to the configured test recipient.',
+      phoneNumberIdMasked: `...${config.phoneNumberId.slice(-4)}`,
+    };
+  }
+
+  if (
+    !hasUsableSecret(process.env.WHATSAPP_APP_SECRET, 16) ||
+    !hasUsableSecret(process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN, 24)
+  ) {
+    return {
+      status: 'not_configured',
+      details: 'Outbound credentials are present, but Meta webhook signing and verification secrets are missing or placeholders. Configure both before enabling production reminders so delivery receipts and customer opt-outs can be verified.',
+      phoneNumberIdMasked: `...${config.phoneNumberId.slice(-4)}`,
+    };
+  }
+
   return {
     status: 'configured',
-    details: 'Server credentials are present. Connectivity and token validity are not checked by a message-free probe; successful submissions are API accepted, and delivery is confirmed only by webhook status events.',
-    phoneNumberIdMasked: config.phoneNumberId ? `...${config.phoneNumberId.slice(-4)}` : undefined,
+    details: 'Production template and webhook secrets are present. Connectivity and token validity are not checked by a message-free probe; successful submissions are API accepted, and delivery is confirmed only by verified webhook status events.',
+    phoneNumberIdMasked: `...${config.phoneNumberId.slice(-4)}`,
   };
 }
 
@@ -98,7 +124,7 @@ export async function sendWhatsAppTemplateMessage(params: {
       : {
           name: config.templateName || 'service_maintenance_reminder',
           language: {
-            code: params.languageCode || 'en_US',
+            code: params.languageCode || 'en',
           },
           components: [
             {

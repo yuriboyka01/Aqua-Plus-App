@@ -12,7 +12,7 @@ import {
   buildDailyOwnerDigestSummary,
 } from '../utils/businessLogic.ts';
 import { getTodayKolkata, getDaysUntilDate } from '../utils/dateUtils.ts';
-import { sendWhatsAppTemplateMessage, getWhatsAppIntegrationStatus } from './whatsappAdapter.ts';
+import { sendWhatsAppTemplateMessage, getWhatsAppIntegrationStatus, getWhatsAppConfig } from './whatsappAdapter.ts';
 import { sendOwnerDailyReportEmail } from './emailAdapter.ts';
 
 export type ReminderUpdate = { id: string; status: any; messageStatus: any; errorMessage?: string };
@@ -138,7 +138,7 @@ export async function executeScheduledDailyBatch(params: {
           serviceRecordId: rem.serviceRecordId,
           idempotencyKey,
           provider: 'whatsapp_cloud_api',
-          templateName: 'service_maintenance_reminder',
+          templateName: getWhatsAppConfig().templateName || 'service_maintenance_reminder',
           language: 'en',
           status: 'success',
           providerMessageId: dispatchResult.providerMessageId,
@@ -165,7 +165,7 @@ export async function executeScheduledDailyBatch(params: {
           serviceRecordId: rem.serviceRecordId,
           idempotencyKey,
           provider: 'whatsapp_cloud_api',
-          templateName: 'service_maintenance_reminder',
+          templateName: getWhatsAppConfig().templateName || 'service_maintenance_reminder',
           language: 'en',
           status: outcomeUnknown ? 'unknown' : 'failed',
           errorDetails: dispatchResult.error || (outcomeUnknown ? 'Provider outcome unknown; manual reconciliation required.' : 'Failed dispatch'),

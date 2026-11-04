@@ -135,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearAuthError = () => setAuthError(null);
 
   // Allowlist check for Aqua Plus authorized owner accounts.
-  const isOwner = !!currentUser &&
+  const isOwner = !!currentUser && currentUser.emailVerified &&
     AUTHORIZED_OWNER_EMAILS.includes(currentUser.email?.toLowerCase() || '');
   return (
     <AuthContext.Provider

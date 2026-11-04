@@ -11,6 +11,7 @@ import { parseMetaPayload, processMetaWebhook, verifyMetaChallenge, verifyMetaSi
 import { normalizePhoneNumber } from '../utils/businessLogic.ts';
 import { generateIdempotencyKey } from '../utils/businessLogic.ts';
 import { getTodayKolkata } from '../utils/dateUtils.ts';
+import { isAllowedOrigin } from '../utils/apiUtils.ts';
 
 const OWNER_EMAILS = new Set(
   (process.env.OWNER_EMAILS || '')
@@ -33,15 +34,9 @@ async function authenticateOwner(req: IncomingMessage): Promise<AuthenticatedOwn
     return null;
   }
   try {
-    let user;
-    try {
-      user = await getAdminAuth().verifyIdToken(token, true);
-    } catch {
-      // Fallback to signature and expiration check if revocation check fails due to local ADC absence
-      user = await getAdminAuth().verifyIdToken(token, false);
-    }
+    const user = await getAdminAuth().verifyIdToken(token, true);
     const email = user.email?.toLowerCase();
-    if (!user.uid || !email || !OWNER_EMAILS.has(email)) {
+    if (!user.uid || !email || user.email_verified !== true || !OWNER_EMAILS.has(email)) {
       console.warn(JSON.stringify({ severity: 'WARNING', message: 'User not on owner allowlist', email, allowed: Array.from(OWNER_EMAILS) }));
       return null;
     }
@@ -112,8 +107,9 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
     if (!url.pathname.startsWith('/api/')) return next();
 
     const origin = req.headers.origin;
-    if (origin) {
+    if (origin && isAllowedOrigin(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With');
@@ -248,9 +244,19 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
 
       if (url.pathname === '/api/whatsapp/send-reminder' && req.method === 'POST') {
         if (!owner) { sendJson(res, 403, { error: 'An owner account is required for reminder dispatch.' }); return; }
+        const whatsappStatus = getWhatsAppIntegrationStatus();
+        if (whatsappStatus.status !== 'configured') {
+          sendJson(res, 503, {
+            success: false,
+            status: 'not_configured',
+            error: whatsappStatus.details,
+          });
+          return;
+        }
         const body = await readJsonBody(req);
         const customerId = typeof body.customerId === 'string' ? body.customerId : '';
         const reminderId = typeof body.reminderId === 'string' ? body.reminderId : '';
+        const languageCode: 'en' | 'ta' = body.languageCode === 'ta' ? 'ta' : 'en';
         if (!/^[a-zA-Z0-9_-]{1,128}$/.test(customerId) || !/^[a-zA-Z0-9_-]{1,128}$/.test(reminderId)) {
           sendJson(res, 400, { error: 'Valid customer and reminder identifiers are required.' }); return;
         }
@@ -284,14 +290,14 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
           return true;
         });
         if (!claimed) { sendJson(res, 409, { error: 'This reminder already has a dispatch reservation.' }); return; }
-        const result = await sendWhatsAppTemplateMessage({ recipientPhone: customer.primaryPhone, customerName: customer.fullName, lastServiceDate: reminder.lastServiceDate, businessPhone: process.env.BUSINESS_PHONE || '+91 70103 29920' });
+        const result = await sendWhatsAppTemplateMessage({ recipientPhone: customer.primaryPhone, customerName: customer.fullName, lastServiceDate: reminder.lastServiceDate, businessPhone: process.env.BUSINESS_PHONE || '+91 70103 29920', languageCode });
         const attemptedAt = new Date().toISOString();
         const attemptId = `attempt_${createHash('sha256').update(`${BUSINESS_OWNER_ID}:${idempotencyKey}:${attemptedAt}`).digest('hex')}`;
         const attemptRef = adminDb.collection('messageAttempts').doc(attemptId);
         try {
           const batch = adminDb.batch();
           batch.update(reservationRef, { status: result.success ? 'sent' : result.status === 'unknown' ? 'processing' : 'failed', providerMessageId: result.providerMessageId || null, finishedAt: attemptedAt });
-          batch.create(attemptRef, { id: attemptId, customerId, customerName: customer.fullName, customerPhone: customer.primaryPhone, reminderId, serviceRecordId: reminder.serviceRecordId || null, idempotencyKey, provider: 'whatsapp_cloud_api', templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'service_maintenance_reminder', language: 'en', status: result.success ? 'success' : result.status === 'unknown' ? 'unknown' : 'failed', providerMessageId: result.providerMessageId || null, errorDetails: result.error || null, attemptedAt, ownerId: BUSINESS_OWNER_ID });
+          batch.create(attemptRef, { id: attemptId, customerId, customerName: customer.fullName, customerPhone: customer.primaryPhone, reminderId, serviceRecordId: reminder.serviceRecordId || null, idempotencyKey, provider: 'whatsapp_cloud_api', templateName: process.env.WHATSAPP_TEMPLATE_NAME || 'service_maintenance_reminder', language: languageCode, status: result.success ? 'success' : result.status === 'unknown' ? 'unknown' : 'failed', providerMessageId: result.providerMessageId || null, errorDetails: result.error || null, attemptedAt, ownerId: BUSINESS_OWNER_ID });
           batch.update(reminderSnap.ref, { status: result.success ? 'sent' : 'failed', messageStatus: result.success ? 'sent' : 'failed', lastAttemptDate: attemptedAt, errorMessage: result.error || null, updatedAt: attemptedAt });
           await batch.commit();
         } catch {
@@ -329,3 +335,4 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
     });
   };
 }
+

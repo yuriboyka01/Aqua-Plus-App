@@ -4,14 +4,14 @@ import { Sidebar, ActiveTab } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { MobileNav } from './components/MobileNav';
 
-// Modals
-import { CustomerModal } from './components/CustomerModal';
-import { CustomerDetailDrawer } from './components/CustomerDetailDrawer';
-import { RecordServiceModal } from './components/RecordServiceModal';
-import { ReminderActionModal } from './components/ReminderActionModal';
-import { DirectWhatsAppPreviewModal } from './components/DirectWhatsAppPreviewModal';
-import { DailyReportModal } from './components/DailyReportModal';
-import { SeedDataModal } from './components/SeedDataModal';
+// Modals are loaded only when opened to keep the initial workspace bundle small.
+const CustomerModal = lazy(() => import('./components/CustomerModal').then((module) => ({ default: module.CustomerModal })));
+const CustomerDetailDrawer = lazy(() => import('./components/CustomerDetailDrawer').then((module) => ({ default: module.CustomerDetailDrawer })));
+const RecordServiceModal = lazy(() => import('./components/RecordServiceModal').then((module) => ({ default: module.RecordServiceModal })));
+const ReminderActionModal = lazy(() => import('./components/ReminderActionModal').then((module) => ({ default: module.ReminderActionModal })));
+const DirectWhatsAppPreviewModal = lazy(() => import('./components/DirectWhatsAppPreviewModal').then((module) => ({ default: module.DirectWhatsAppPreviewModal })));
+const DailyReportModal = lazy(() => import('./components/DailyReportModal').then((module) => ({ default: module.DailyReportModal })));
+const SeedDataModal = lazy(() => import('./components/SeedDataModal').then((module) => ({ default: module.SeedDataModal })));
 
 // Pages
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
@@ -574,16 +574,20 @@ function AquaPlusApp() {
       />
 
       {/* MODALS */}
-      <CustomerModal
-        isOpen={isCustomerModalOpen}
+      <Suspense fallback={null}>
+      {isCustomerModalOpen && (
+        <CustomerModal
+          isOpen={isCustomerModalOpen}
         onClose={() => setIsCustomerModalOpen(false)}
         onSave={handleSaveCustomer}
         existingCustomers={customers}
-        customerToEdit={customerToEdit}
-      />
+          customerToEdit={customerToEdit}
+        />
+      )}
 
-      <CustomerDetailDrawer
-        customer={selectedCustomerForDetail}
+      {selectedCustomerForDetail && (
+        <CustomerDetailDrawer
+          customer={selectedCustomerForDetail}
         onClose={() => setSelectedCustomerForDetail(null)}
         serviceHistory={serviceRecords.filter((s) => s.customerId === selectedCustomerForDetail?.id)}
         reminders={reminders.filter((r) => r.customerId === selectedCustomerForDetail?.id)}
@@ -596,19 +600,23 @@ function AquaPlusApp() {
           handleOpenRecordService(cust);
         }}
         onArchiveToggle={handleArchiveToggle}
-        onPauseToggle={handleCustomerPauseToggle}
-      />
+          onPauseToggle={handleCustomerPauseToggle}
+        />
+      )}
 
-      <RecordServiceModal
-        isOpen={isRecordServiceModalOpen}
+      {isRecordServiceModalOpen && (
+        <RecordServiceModal
+          isOpen={isRecordServiceModalOpen}
         onClose={() => setIsRecordServiceModalOpen(false)}
         customers={customers.filter((c) => c.status === 'active')}
         preselectedCustomer={preselectedCustomerForService}
-        onSave={handleSaveServiceRecord}
-      />
+          onSave={handleSaveServiceRecord}
+        />
+      )}
 
-      <ReminderActionModal
-        isOpen={!!selectedReminderForAction}
+      {selectedReminderForAction && (
+        <ReminderActionModal
+          isOpen={!!selectedReminderForAction}
         onClose={() => setSelectedReminderForAction(null)}
         reminder={selectedReminderForAction}
         onReschedule={async (remId, custId, newDate, reason) => {
@@ -630,9 +638,11 @@ function AquaPlusApp() {
             setCustomerForWhatsApp(c);
           }
         }}
-      />
+        />
+      )}
 
-      <DirectWhatsAppPreviewModal
+      {reminderForWhatsApp && customerForWhatsApp && (
+        <DirectWhatsAppPreviewModal
         isOpen={!!reminderForWhatsApp && !!customerForWhatsApp}
         onClose={() => {
           setReminderForWhatsApp(null);
@@ -640,16 +650,20 @@ function AquaPlusApp() {
         }}
         reminder={reminderForWhatsApp}
         customer={customerForWhatsApp}
-        settings={settings}
-      />
+          settings={settings}
+        />
+      )}
 
-      <DailyReportModal
+      {selectedReportForView && (
+        <DailyReportModal
         isOpen={!!selectedReportForView}
         onClose={() => setSelectedReportForView(null)}
-        report={selectedReportForView}
-      />
+          report={selectedReportForView}
+        />
+      )}
 
-      <SeedDataModal
+      {isSeedModalOpen && (
+        <SeedDataModal
         isOpen={isSeedModalOpen}
         onClose={() => setIsSeedModalOpen(false)}
         hasSampleData={hasSampleData}
@@ -661,7 +675,9 @@ function AquaPlusApp() {
           const effectiveOwnerId = BUSINESS_OWNER_ID;
           return await purgeSampleData(customers, serviceRecords, reminders, effectiveOwnerId);
         }}
-      />
+        />
+      )}
+      </Suspense>
     </div>
   );
 }

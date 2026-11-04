@@ -137,8 +137,8 @@ test('non-allowlisted users cannot read customer records', async () => {
   await assertFails(getDoc(doc(db, 'customers', 'c-real')));
 });
 
-test('allowlisted accounts can read customer records without email verification', async () => {
-  await assertSucceeds(getDoc(doc(unverifiedOwnerDb(), 'customers', 'c-real')));
+test('allowlisted accounts must have verified email addresses', async () => {
+  await assertFails(getDoc(doc(unverifiedOwnerDb(), 'customers', 'c-real')));
 });
 
 test('verified allowlisted owner can read existing business records', async () => {
@@ -214,7 +214,7 @@ test('a service record must reference an existing customer', async () => {
 });
 
 test('allowlisted owner can list collections without query filters', async () => {
-  const db = unverifiedOwnerDb();
+  const db = ownerDb();
   await assertSucceeds(getDocs(collection(db, 'customers')));
   await assertSucceeds(getDocs(collection(db, 'serviceRecords')));
   await assertSucceeds(getDocs(collection(db, 'reminders')));
@@ -235,4 +235,3 @@ test('unauthenticated or non-allowlisted clients cannot list collections', async
   await assertFails(getDocs(collection(attackerDb, 'customers')));
   await assertFails(getDocs(collection(attackerDb, 'serviceRecords')));
 });
-

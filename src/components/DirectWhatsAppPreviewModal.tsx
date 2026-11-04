@@ -68,7 +68,7 @@ export const DirectWhatsAppPreviewModal: React.FC<DirectWhatsAppPreviewModalProp
     setDispatching(true);
     setApiResult(null);
     try {
-      const res = await sendWhatsAppReminder(customer.id, reminder.id);
+      const res = await sendWhatsAppReminder(customer.id, reminder.id, language);
       if (res.success) {
         setApiResult({
           success: true,

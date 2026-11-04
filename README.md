@@ -73,6 +73,8 @@
 
 Use `.env.example` as the variable checklist. Put provider and scheduler secrets in the hosting secret manager, never in frontend build variables. The Admin SDK verifies Firebase ID tokens and restricts API access to verified owner emails. Attach a Cloud Run service account with Firestore access; do not download a service-account key into the app.
 
+**Android / Capacitor API URL:** The web app can leave `VITE_API_BASE_URL` empty when it is served by this Express server, because it uses the same-origin `/api` routes. Native Android builds run under `capacitor://localhost` and must know the public backend URL. Set `VITE_API_BASE_URL` to the deployed HTTPS backend URL before running `npm run cap:build`, or open Settings in the installed app and save the URL under **Backend API URL**. This URL is public configuration only. Never put Meta, Resend, Firebase Admin, or scheduler secrets in it.
+
 ```env
 # Firebase Admin SDK / database
 FIREBASE_PROJECT_ID="positive-drake-n4mm2"

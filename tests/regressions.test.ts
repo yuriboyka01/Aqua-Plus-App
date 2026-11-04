@@ -4,8 +4,10 @@ import { createHmac } from 'node:crypto';
 import { evaluateReminderEligibility, generateIdempotencyKey, shouldSupersedeReminder } from '../src/utils/businessLogic.ts';
 import { runAllBusinessLogicTests } from '../src/utils/testRunner.ts';
 import { getTodayKolkata } from '../src/utils/dateUtils.ts';
+import { isHttpProtocol } from '../src/utils/apiUtils.ts';
 import { executeScheduledDailyBatch } from '../src/server/schedulerAdapter.ts';
 import { parseMetaPayload, processMetaWebhook, verifyMetaChallenge, verifyMetaSignature } from '../src/server/metaWebhook.ts';
+import { getWhatsAppIntegrationStatus, sendWhatsAppTemplateMessage } from '../src/server/whatsappAdapter.ts';
 
 const today = getTodayKolkata();
 function customer(overrides: Record<string, unknown> = {}): any {
@@ -15,6 +17,23 @@ function reminder(overrides: Record<string, unknown> = {}): any {
   return { id: 'r1', customerId: 'c1', customerName: 'Test', customerPhone: '9876543210', customerLocality: 'Madurai', serviceRecordId: 's1', lastServiceDate: today, reminderDate: today, status: 'due_today', messageStatus: 'not_sent', ownerId: 'owner', ...overrides };
 }
 const settings: any = { businessName: 'AquaPlus', primaryPhone: '7010329920', businessEmail: '', ownerNotificationEmail: '', ownerEmailConfirmed: false, scheduledProcessingEnabled: true };
+
+async function withEnv<T>(values: Record<string, string | undefined>, callback: () => Promise<T> | T): Promise<T> {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(values)) {
+    previous.set(key, process.env[key]);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    return await callback();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
 
 test('existing built-in business logic suite passes', () => {
   const results = runAllBusinessLogicTests();
@@ -181,4 +200,72 @@ test('ambiguous phone matches are audited without changing either customer', asy
 
 test('idempotency key is stable for the same reminder cycle', () => {
   assert.equal(generateIdempotencyKey('c1', 's1', today), generateIdempotencyKey('c1', 's1', today));
+});
+
+
+test('same-origin backend requests are supported on HTTP(S), not native app origins', () => {
+  assert.equal(isHttpProtocol('http:'), true);
+  assert.equal(isHttpProtocol('https:'), true);
+  assert.equal(isHttpProtocol('capacitor:'), false);
+  assert.equal(isHttpProtocol('file:'), false);
+});
+
+test('production WhatsApp stays disabled for hello_world or missing webhook secrets', async () => {
+  await withEnv({
+    WHATSAPP_ACCESS_TOKEN: 'local-test-token',
+    WHATSAPP_PHONE_NUMBER_ID: '123456789012345',
+    WHATSAPP_TEMPLATE_NAME: 'hello_world',
+    WHATSAPP_APP_SECRET: 'x'.repeat(32),
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: 'y'.repeat(32),
+  }, () => {
+    const testOnly = getWhatsAppIntegrationStatus();
+    assert.equal(testOnly.status, 'not_configured');
+    assert.match(testOnly.details, /hello_world|test template/i);
+
+    process.env.WHATSAPP_TEMPLATE_NAME = 'service_maintenance_reminder';
+    delete process.env.WHATSAPP_APP_SECRET;
+    const missingAppSecret = getWhatsAppIntegrationStatus();
+    assert.equal(missingAppSecret.status, 'not_configured');
+    assert.match(missingAppSecret.details, /webhook/i);
+
+    process.env.WHATSAPP_APP_SECRET = 'x'.repeat(32);
+    delete process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+    assert.equal(getWhatsAppIntegrationStatus().status, 'not_configured');
+
+    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN = 'y'.repeat(32);
+    assert.equal(getWhatsAppIntegrationStatus().status, 'configured');
+  });
+});
+
+test('approved reminder template defaults to the documented English language code', async () => {
+  await withEnv({
+    WHATSAPP_ACCESS_TOKEN: 'local-test-token',
+    WHATSAPP_PHONE_NUMBER_ID: '123456789012345',
+    WHATSAPP_TEMPLATE_NAME: 'service_maintenance_reminder',
+    WHATSAPP_GRAPH_API_VERSION: 'v25.0',
+  }, async () => {
+    const originalFetch = globalThis.fetch;
+    let capturedPayload: any;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedPayload = JSON.parse(String(init?.body || '{}'));
+      return new Response(JSON.stringify({ messages: [{ id: 'wamid.local-test' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await sendWhatsAppTemplateMessage({
+        recipientPhone: '9876543210',
+        customerName: 'Local Test',
+        lastServiceDate: '30 Oct 2026',
+        businessPhone: '+91 70103 29920',
+      });
+      assert.equal(result.success, true);
+      assert.equal(capturedPayload.template.name, 'service_maintenance_reminder');
+      assert.equal(capturedPayload.template.language.code, 'en');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

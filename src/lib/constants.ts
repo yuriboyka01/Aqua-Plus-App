@@ -6,7 +6,7 @@ export const BUSINESS_OWNER_ID = 'aquaplus-business';
 export const BUSINESS_CONFIG = {
   businessName: 'Aqua Plus RO Tech',
   location: 'Madurai, Tamil Nadu, India',
-  businessAddress: 'Thirunagar 5th Stop, Madurai-625006',
+  businessAddress: 'Thirunagar 3rd Stop, near BATA showroom, Madurai-625006',
   primaryPhone: '+91 70103 29920',
   secondaryPhone: '+91 63857 86516',
   businessEmail: 'aquaplusrosales@gmail.com',
