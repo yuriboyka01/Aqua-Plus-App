@@ -1,7 +1,7 @@
 # AquaPlus Service OS: Technical and Security Audit
 
 **Audit date:** 19 October 2026  
-**Repository:** C:\Users\nisan\Downloads\aquaplus-service-os  
+**Repository:** C:\Users\nisan\Downloads\aquaplus-service  
 **Overall assessment:** Strong prototype foundation, but not yet ready for unattended production messaging.  
 **Risk before live automation:** Medium-high, mainly due to reminder lifecycle and messaging-consent gaps.
 
@@ -148,7 +148,7 @@ The verification work was extended after the original audit. No production deplo
 
 - Installed Eclipse Temurin JDK 21 for local emulator execution.
 - Added `firebase-tools` and `@firebase/rules-unit-testing` as development dependencies.
-- Added `firebase.emulator.json`, which runs only the Firestore Emulator on localhost and uses the demo-only project ID `demo-aquaplus-service-os`.
+- Added `firebase.emulator.json`, which runs only the Firestore Emulator on localhost and uses the demo-only project ID `demo-aquaplus-service`.
 - Added `tests/firestore.rules.test.ts` and the npm scripts `test:rules` / `test:rules:run`.
 - Added tests for verified owner access, unauthenticated and unauthorized reads, unknown fields, monetary constraints, immutable sample-data markers, production-record deletion protection, append-only message attempts, terminal superseded reminders, allowed owner updates, sample cleanup, and customer references.
 

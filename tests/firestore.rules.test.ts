@@ -18,7 +18,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
-const PROJECT_ID = 'demo-aquaplus-service-os';
+const PROJECT_ID = 'demo-aquaplus-service';
 const OWNER_EMAIL = 'nisanth.t9c@gmail.com';
 const OWNER_ID = 'aquaplus-business';
 let testEnv: RulesTestEnvironment;

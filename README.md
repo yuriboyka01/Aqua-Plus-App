@@ -103,8 +103,8 @@ EMAIL_FROM="Aqua Plus RO Tech <reports@your-verified-domain.com>"
 Build and run the Docker container to serve the Vite frontend and the Express API:
 
 ```bash
-docker build -t aquaplus-service-os .
-docker run --rm -p 8080:8080 --env-file .env aquaplus-service-os
+docker build -t aquaplus-service .
+docker run --rm -p 8080:8080 --env-file .env aquaplus-service
 ```
 
 Deploy the same image to Cloud Run and configure server variables with Secret Manager. Attach a service account with `roles/datastore.user` and read-only `roles/firebaseauth.viewer` on the Firebase project: Firestore Admin reads/writes business data, while token revocation and scheduler-owner checks read Auth users. Add the production hostname to Firebase Authentication's authorized domains and deploy the rules to the configured named database with `firebase deploy --project positive-drake-n4mm2 --only firestore:ai-studio-4b6f33c0-20b1-4c18-b179-368ff6878ffb` before inviting owners. Confirm this is the production Firebase project before deploying.
@@ -168,4 +168,4 @@ View and re-run all tests anytime in the app under **"Logic Verification"** in t
 
 Run the repeatable local regression suite with `npm test`; it includes the existing 11 business-logic checks plus scheduler lifecycle, reservation/persistence, webhook signature, delivery correlation, and opt-out cases. `npm run lint` and `npm run build` check types and production bundles.
 
-Run Firestore Security Rules tests with `npm run test:rules`. This starts a local Firestore Emulator using `firebase.emulator.json`, runs `tests/firestore.rules.test.ts` against the demo-only project ID `demo-aquaplus-service-os`, then shuts the emulator down. The tests do not deploy rules or access production Firebase. Requires Java 21 or later on `PATH` and installed project dependencies (`npm install`). Never change the demo project ID in this test command to a production project.
+Run Firestore Security Rules tests with `npm run test:rules`. This starts a local Firestore Emulator using `firebase.emulator.json`, runs `tests/firestore.rules.test.ts` against the demo-only project ID `demo-aquaplus-service`, then shuts the emulator down. The tests do not deploy rules or access production Firebase. Requires Java 21 or later on `PATH` and installed project dependencies (`npm install`). Never change the demo project ID in this test command to a production project.
