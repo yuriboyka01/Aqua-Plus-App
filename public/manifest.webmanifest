@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "AquaPlus Service",
+  "short_name": "AquaPlus",
+  "description": "Service visits and maintenance reminders for Aqua Plus RO Tech.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FAF8F3",
+  "theme_color": "#0C231F",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

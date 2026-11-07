@@ -1,0 +1,6 @@
+{
+  "name": "AquaPlus Service",
+  "description": "Internal service management, RO water purifier maintenance reminders, and automated customer follow-ups for Aqua Plus RO Tech, Madurai.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AquaPlus Service</string>
+    <string name="title_activity_main">AquaPlus Service</string>
+    <string name="package_name">com.aquaplus.service</string>
+    <string name="custom_url_scheme">com.aquaplus.service</string>
+</resources>

@@ -1,0 +1,210 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAuthorizedOwnerAccount() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email in ['nisanth.t9c@gmail.com', 'aquaplusrosales@gmail.com', 'vishaalchinnan@gmail.com'];
+    }
+
+    function isOwner(ownerId) {
+      // All authorized accounts belong to this one business and share its records.
+      return isAuthorizedOwnerAccount();
+    }
+
+    function belongsToOwner(customerId, ownerId) {
+      return customerId is string &&
+        exists(/databases/$(database)/documents/customers/$(customerId)) &&
+        isAuthorizedOwnerAccount();
+    }
+
+    // Customer Validation
+    function isValidCustomer(data) {
+      return data.keys().hasOnly(['id', 'customerId', 'fullName', 'primaryPhone', 'alternatePhone', 'address', 'locality', 'customerNotes', 'purifierBrand', 'purifierModel', 'installationDate', 'registrationDate', 'whatsappConsent', 'emailConsent', 'consentTimestamp', 'consentSource', 'status', 'defaultIntervalDays', 'lastServiceDate', 'nextReminderDate', 'remindersPaused', 'isSampleData', 'ownerId', 'createdAt', 'updatedAt']) &&
+             data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+             data.primaryPhone is string && data.primaryPhone.size() >= 5 && data.primaryPhone.size() <= 20 &&
+             data.ownerId is string && data.ownerId.size() <= 128 &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 300)) &&
+             (!('locality' in data) || (data.locality is string && data.locality.size() <= 100)) &&
+             (!('purifierBrand' in data) || (data.purifierBrand is string && data.purifierBrand.size() <= 80));
+    }
+
+    // ServiceRecord Validation
+    function isValidServiceRecord(data) {
+      return data.keys().hasOnly(['id', 'customerId', 'customerName', 'customerPhone', 'customerAddress', 'serviceDate', 'serviceCategory', 'problemReported', 'workPerformed', 'filtersReplaced', 'serviceCharge', 'partsCharge', 'totalAmount', 'paymentStatus', 'technicianNotes', 'recommendedIntervalDays', 'calculatedNextReminderDate', 'nextReminderDate', 'isDateOverridden', 'internalNotes', 'isSampleData', 'ownerId', 'createdAt', 'updatedAt']) &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.serviceDate is string && data.serviceDate.size() <= 30 &&
+             data.serviceCategory is string && data.serviceCategory.size() <= 80 &&
+             data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 1000000 &&
+             data.partsCharge is number && data.partsCharge >= 0 && data.partsCharge <= 1000000 &&
+             data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 1000000 &&
+             data.ownerId is string && data.ownerId.size() <= 128;
+    }
+
+    // Reminder Validation
+    function isValidReminder(data) {
+      return data.keys().hasOnly(['id', 'customerId', 'customerName', 'customerPhone', 'customerLocality', 'serviceRecordId', 'serviceCategory', 'lastServiceDate', 'reminderDate', 'status', 'manualContactNotes', 'manualContactDate', 'lastAttemptDate', 'messageStatus', 'errorMessage', 'isSampleData', 'ownerId', 'createdAt', 'updatedAt']) &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.reminderDate is string && data.reminderDate.size() <= 30 &&
+             data.status in ['upcoming', 'due_today', 'overdue', 'paused', 'sent', 'failed', 'contacted_manually', 'superseded'] &&
+             data.messageStatus in ['not_sent', 'pending', 'sent', 'failed'] &&
+             data.ownerId is string && data.ownerId.size() <= 128;
+    }
+
+    // MessageAttempt Validation
+    function isValidMessageAttempt(data) {
+      return data.keys().hasOnly(['id', 'customerId', 'customerName', 'customerPhone', 'reminderId', 'serviceRecordId', 'idempotencyKey', 'provider', 'templateName', 'language', 'status', 'providerMessageId', 'errorDetails', 'attemptedAt', 'ownerId']) &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.idempotencyKey is string && data.idempotencyKey.size() <= 160 &&
+             data.status in ['success', 'failed', 'unknown', 'simulated_blocked'] &&
+             data.ownerId is string && data.ownerId.size() <= 128;
+    }
+
+    // OwnerReport Validation
+    function isValidOwnerReport(data) {
+      return data.keys().hasOnly(['id', 'reportDate', 'generatedAt', 'recipientEmail', 'status', 'totalCustomers', 'completedToday', 'dueToday', 'upcomingCount', 'overdueCount', 'messagesSentCount', 'messagesFailedCount', 'manualFollowUpsCount', 'consentAttentionCount', 'summaryText', 'ownerId']) &&
+             data.reportDate is string && data.reportDate.size() <= 30 &&
+             data.ownerId is string && data.ownerId.size() <= 128;
+    }
+
+    // Settings Validation
+    function isValidSettings(data) {
+      return data.keys().hasOnly(['id', 'businessName', 'location', 'businessAddress', 'primaryPhone', 'secondaryPhone', 'businessEmail', 'website', 'ownerNotificationEmail', 'ownerEmailConfirmed', 'dailyReportTime', 'timezone', 'currency', 'defaultIntervalDays', 'categoryIntervals', 'whatsappTemplateEn', 'whatsappTemplateTa', 'whatsappStatus', 'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'whatsappAccessTokenMasked', 'emailStatus', 'scheduledProcessingEnabled', 'lastScheduledRun', 'ownerId', 'updatedAt']) &&
+             data.businessName is string && data.businessName.size() <= 100 &&
+             data.ownerId is string && data.ownerId.size() <= 128;
+    }
+
+    // AuditEvent Validation
+    function isValidAuditEvent(data) {
+      return data.keys().hasOnly(['id', 'action', 'details', 'entityType', 'entityId', 'ownerId', 'timestamp']) &&
+             data.action is string && data.action.size() <= 80 &&
+             data.ownerId is string && data.ownerId.size() <= 128;
+    }
+
+    // Collections
+    match /customers/{customerId} {
+      allow get: if isValidId(customerId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isValidId(customerId) &&
+                      isOwner(incoming().ownerId) &&
+                      isValidCustomer(incoming());
+      allow update: if isValidId(customerId) &&
+                      isOwner(existing().ownerId) &&
+                      incoming().ownerId == existing().ownerId &&
+                      incoming().get('isSampleData', false) == existing().get('isSampleData', false) &&
+                      isValidCustomer(incoming());
+      allow delete: if isValidId(customerId) && isOwner(existing().ownerId) && existing().isSampleData == true;
+    }
+
+    match /serviceRecords/{serviceRecordId} {
+      allow get: if isValidId(serviceRecordId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isValidId(serviceRecordId) &&
+                      isOwner(incoming().ownerId) &&
+                      belongsToOwner(incoming().customerId, incoming().ownerId) &&
+                      isValidServiceRecord(incoming());
+      allow update: if isValidId(serviceRecordId) &&
+                      isOwner(existing().ownerId) &&
+                      incoming().ownerId == existing().ownerId &&
+                      incoming().get('isSampleData', false) == existing().get('isSampleData', false) &&
+                      belongsToOwner(incoming().customerId, incoming().ownerId) &&
+                      isValidServiceRecord(incoming());
+      // Only sample data service records can be deleted; real records are immutable for audit integrity
+      allow delete: if isValidId(serviceRecordId) && isOwner(existing().ownerId) && existing().isSampleData == true;
+    }
+
+    match /reminders/{reminderId} {
+      allow get: if isValidId(reminderId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isValidId(reminderId) &&
+                      isOwner(incoming().ownerId) &&
+                      belongsToOwner(incoming().customerId, incoming().ownerId) &&
+                      isValidReminder(incoming());
+      allow update: if isValidId(reminderId) &&
+                      isOwner(existing().ownerId) &&
+                      incoming().ownerId == existing().ownerId &&
+                      incoming().get('isSampleData', false) == existing().get('isSampleData', false) &&
+                      (existing().status != 'superseded' || incoming().status == 'superseded') &&
+                      belongsToOwner(incoming().customerId, incoming().ownerId) &&
+                      isValidReminder(incoming());
+      allow delete: if isValidId(reminderId) && isOwner(existing().ownerId) && existing().isSampleData == true;
+    }
+
+    match /messageAttempts/{attemptId} {
+      allow get: if isValidId(attemptId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isValidId(attemptId) &&
+                      isOwner(incoming().ownerId) &&
+                      belongsToOwner(incoming().customerId, incoming().ownerId) &&
+                      isValidMessageAttempt(incoming());
+      allow update: if false; // Idempotent logs are append-only
+      allow delete: if false; // Message attempt history is append-only
+    }
+
+    match /messageDeliveryStatus/{statusId} {
+      allow get: if isValidId(statusId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create, update, delete: if false; // Only the verified server webhook writes delivery status
+    }
+
+    match /ownerReports/{reportId} {
+      allow get: if isValidId(reportId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isValidId(reportId) &&
+                      isOwner(incoming().ownerId) &&
+                      isValidOwnerReport(incoming());
+      allow update: if isValidId(reportId) &&
+                      isOwner(existing().ownerId) &&
+                      incoming().ownerId == existing().ownerId &&
+                      isValidOwnerReport(incoming());
+      allow delete: if isValidId(reportId) && isOwner(existing().ownerId);
+    }
+
+    match /settings/{settingsId} {
+      allow get: if isValidId(settingsId) && isAuthorizedOwnerAccount() &&
+        (!exists(/databases/$(database)/documents/settings/$(settingsId)) || isOwner(existing().ownerId));
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isValidId(settingsId) &&
+                      isOwner(incoming().ownerId) &&
+                      isValidSettings(incoming());
+      allow update: if isValidId(settingsId) &&
+                      isOwner(existing().ownerId) &&
+                      (incoming().ownerId == existing().ownerId || incoming().ownerId == 'aquaplus-business') &&
+                      isValidSettings(incoming());
+      allow delete: if false; // Settings document should not be deleted
+    }
+
+    match /auditEvents/{eventId} {
+      allow get: if isValidId(eventId) && isOwner(existing().ownerId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isValidId(eventId) &&
+                      isOwner(incoming().ownerId) &&
+                      isValidAuditEvent(incoming());
+      allow update: if false; // Audit logs are immutable
+      allow delete: if false; // Audit logs cannot be deleted
+    }
+  }
+}

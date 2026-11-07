@@ -1,0 +1,211 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer record for RO water purifier service management",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "maxLength": 50, "description": "Unique customer reference code like AP-1001" },
+        "fullName": { "type": "string", "maxLength": 120, "description": "Customer full name" },
+        "primaryPhone": { "type": "string", "maxLength": 20, "pattern": "^[0-9+\\- ]+$", "description": "Primary contact number" },
+        "alternatePhone": { "type": "string", "maxLength": 20, "description": "Optional alternate phone number" },
+        "address": { "type": "string", "maxLength": 300, "description": "Customer street address" },
+        "locality": { "type": "string", "maxLength": 100, "description": "Area or neighborhood in Madurai" },
+        "customerNotes": { "type": "string", "maxLength": 1000, "description": "Special directions or notes" },
+        "purifierBrand": { "type": "string", "maxLength": 80, "description": "Brand of RO water purifier" },
+        "purifierModel": { "type": "string", "maxLength": 80, "description": "Model or system type" },
+        "installationDate": { "type": "string", "maxLength": 30, "description": "Approximate or exact installation date" },
+        "registrationDate": { "type": "string", "maxLength": 30, "description": "Registration date" },
+        "whatsappConsent": { "type": "boolean", "description": "Consent for WhatsApp service reminders" },
+        "emailConsent": { "type": "boolean", "description": "Consent for email communications" },
+        "consentTimestamp": { "type": "string", "maxLength": 40, "description": "When consent was recorded" },
+        "consentSource": { "type": "string", "maxLength": 100, "description": "Consent capture channel" },
+        "status": { "type": "string", "enum": ["active", "archived"], "description": "Active or archived status" },
+        "defaultIntervalDays": { "type": "number", "description": "Custom service reminder interval in days" },
+        "lastServiceDate": { "type": "string", "maxLength": 30, "description": "Most recent service date" },
+        "nextReminderDate": { "type": "string", "maxLength": 30, "description": "Next scheduled reminder date" },
+        "remindersPaused": { "type": "boolean", "description": "Whether automated reminders are paused" },
+        "ownerId": { "type": "string", "maxLength": 128, "description": "Owner user UID" },
+        "createdAt": { "type": "string", "maxLength": 40, "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "maxLength": 40, "description": "Last update timestamp" }
+      },
+      "required": ["fullName", "primaryPhone", "ownerId"]
+    },
+    "ServiceRecord": {
+      "title": "ServiceRecord",
+      "description": "Historical RO purifier service log entry",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "maxLength": 128, "description": "Customer Firestore document ID" },
+        "customerName": { "type": "string", "maxLength": 120, "description": "Denormalized customer name" },
+        "customerPhone": { "type": "string", "maxLength": 20, "description": "Denormalized customer phone" },
+        "customerAddress": { "type": "string", "maxLength": 300, "description": "Denormalized customer address" },
+        "serviceDate": { "type": "string", "maxLength": 30, "description": "Date service was conducted" },
+        "serviceCategory": { "type": "string", "maxLength": 80, "description": "Category of maintenance service" },
+        "problemReported": { "type": "string", "maxLength": 500, "description": "Issue reported by customer" },
+        "workPerformed": { "type": "string", "maxLength": 800, "description": "Details of work performed" },
+        "filtersReplaced": { "type": "string", "maxLength": 500, "description": "Filters and components replaced" },
+        "serviceCharge": { "type": "number", "description": "Labor / service charge in INR" },
+        "partsCharge": { "type": "number", "description": "Spare parts cost in INR" },
+        "totalAmount": { "type": "number", "description": "Total amount collected in INR" },
+        "paymentStatus": { "type": "string", "enum": ["Paid", "Pending", "Partial"], "description": "Payment settlement status" },
+        "technicianNotes": { "type": "string", "maxLength": 800, "description": "Technician findings and TDS notes" },
+        "recommendedIntervalDays": { "type": "number", "description": "Recommended interval until next service" },
+        "calculatedNextReminderDate": { "type": "string", "maxLength": 30, "description": "Calculated next reminder date" },
+        "nextReminderDate": { "type": "string", "maxLength": 30, "description": "Final scheduled reminder date" },
+        "isDateOverridden": { "type": "boolean", "description": "Whether reminder date was manually adjusted" },
+        "internalNotes": { "type": "string", "maxLength": 800, "description": "Internal business notes" },
+        "ownerId": { "type": "string", "maxLength": 128, "description": "Owner user UID" },
+        "createdAt": { "type": "string", "maxLength": 40, "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "maxLength": 40, "description": "Last update timestamp" }
+      },
+      "required": ["customerId", "serviceDate", "serviceCategory", "ownerId"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "Calculated reminder instance for maintenance follow-up",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "maxLength": 128, "description": "Associated customer ID" },
+        "customerName": { "type": "string", "maxLength": 120, "description": "Customer name" },
+        "customerPhone": { "type": "string", "maxLength": 20, "description": "Customer phone" },
+        "customerLocality": { "type": "string", "maxLength": 100, "description": "Locality in Madurai" },
+        "serviceRecordId": { "type": "string", "maxLength": 128, "description": "Service record reference" },
+        "serviceCategory": { "type": "string", "maxLength": 80, "description": "Prior service category" },
+        "lastServiceDate": { "type": "string", "maxLength": 30, "description": "Date of last service" },
+        "reminderDate": { "type": "string", "maxLength": 30, "description": "Target reminder date YYYY-MM-DD" },
+        "status": { "type": "string", "enum": ["upcoming", "due_today", "overdue", "paused", "sent", "failed", "contacted_manually"], "description": "Operational reminder state" },
+        "manualContactNotes": { "type": "string", "maxLength": 500, "description": "Notes if contacted via phone call" },
+        "manualContactDate": { "type": "string", "maxLength": 40, "description": "Timestamp of manual phone contact" },
+        "lastAttemptDate": { "type": "string", "maxLength": 40, "description": "Timestamp of last outbound attempt" },
+        "messageStatus": { "type": "string", "enum": ["not_sent", "pending", "sent", "failed"], "description": "WhatsApp dispatch state" },
+        "errorMessage": { "type": "string", "maxLength": 500, "description": "Failure reason if dispatch failed" },
+        "ownerId": { "type": "string", "maxLength": 128, "description": "Owner user UID" },
+        "createdAt": { "type": "string", "maxLength": 40, "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "maxLength": 40, "description": "Last update timestamp" }
+      },
+      "required": ["customerId", "reminderDate", "ownerId"]
+    },
+    "MessageAttempt": {
+      "title": "MessageAttempt",
+      "description": "Idempotent log of an outbound WhatsApp message dispatch attempt",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "maxLength": 128, "description": "Recipient customer ID" },
+        "customerName": { "type": "string", "maxLength": 120, "description": "Recipient customer name" },
+        "customerPhone": { "type": "string", "maxLength": 20, "description": "Recipient phone number" },
+        "reminderId": { "type": "string", "maxLength": 128, "description": "Associated reminder ID" },
+        "serviceRecordId": { "type": "string", "maxLength": 128, "description": "Associated service record ID" },
+        "idempotencyKey": { "type": "string", "maxLength": 160, "description": "Unique deduplication hash" },
+        "provider": { "type": "string", "maxLength": 50, "description": "Messaging gateway provider" },
+        "templateName": { "type": "string", "maxLength": 80, "description": "Meta WhatsApp template name" },
+        "language": { "type": "string", "maxLength": 10, "description": "Template language code" },
+        "status": { "type": "string", "enum": ["success", "failed", "simulated_blocked"], "description": "Final dispatch status" },
+        "providerMessageId": { "type": "string", "maxLength": 128, "description": "Provider message ID" },
+        "errorDetails": { "type": "string", "maxLength": 500, "description": "Failure error details" },
+        "attemptedAt": { "type": "string", "maxLength": 40, "description": "Dispatch timestamp" },
+        "ownerId": { "type": "string", "maxLength": 128, "description": "Owner user UID" }
+      },
+      "required": ["customerId", "idempotencyKey", "ownerId"]
+    },
+    "OwnerReport": {
+      "title": "OwnerReport",
+      "description": "Daily digest report for the business owner",
+      "type": "object",
+      "properties": {
+        "reportDate": { "type": "string", "maxLength": 30, "description": "Date of daily report YYYY-MM-DD" },
+        "generatedAt": { "type": "string", "maxLength": 40, "description": "Generation timestamp" },
+        "recipientEmail": { "type": "string", "maxLength": 120, "description": "Target email address" },
+        "status": { "type": "string", "enum": ["generated", "sent", "failed", "not_configured"], "description": "Report delivery status" },
+        "totalCustomers": { "type": "number", "description": "Total active customer count" },
+        "completedToday": { "type": "number", "description": "Services completed today" },
+        "dueToday": { "type": "number", "description": "Services due today" },
+        "upcomingCount": { "type": "number", "description": "Upcoming services in next 14 days" },
+        "overdueCount": { "type": "number", "description": "Overdue services" },
+        "messagesSentCount": { "type": "number", "description": "WhatsApp messages delivered" },
+        "messagesFailedCount": { "type": "number", "description": "Messages failed" },
+        "manualFollowUpsCount": { "type": "number", "description": "Manual phone contacts" },
+        "consentAttentionCount": { "type": "number", "description": "Customers needing consent check" },
+        "summaryText": { "type": "string", "maxLength": 4000, "description": "Formatted report content" },
+        "ownerId": { "type": "string", "maxLength": 128, "description": "Owner user UID" }
+      },
+      "required": ["reportDate", "ownerId"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Business profile, reminder intervals, and gateway configurations",
+      "type": "object",
+      "properties": {
+        "businessName": { "type": "string", "maxLength": 100, "description": "Business name" },
+        "location": { "type": "string", "maxLength": 100, "description": "City / Location" },
+        "businessAddress": { "type": "string", "maxLength": 200, "description": "Physical shop address" },
+        "primaryPhone": { "type": "string", "maxLength": 25, "description": "Primary contact number" },
+        "secondaryPhone": { "type": "string", "maxLength": 25, "description": "Secondary contact number" },
+        "businessEmail": { "type": "string", "maxLength": 120, "description": "Official business email" },
+        "website": { "type": "string", "maxLength": 150, "description": "Official website URL" },
+        "ownerNotificationEmail": { "type": "string", "maxLength": 120, "description": "Email address for daily reports" },
+        "ownerEmailConfirmed": { "type": "boolean", "description": "Whether owner confirmed notification email" },
+        "dailyReportTime": { "type": "string", "maxLength": 10, "description": "Daily digest time e.g. 09:00" },
+        "timezone": { "type": "string", "maxLength": 50, "description": "Default timezone" },
+        "currency": { "type": "string", "maxLength": 10, "description": "Currency code" },
+        "defaultIntervalDays": { "type": "number", "description": "Default maintenance interval in days" },
+        "categoryIntervals": { "type": "string", "maxLength": 1000, "description": "JSON map of category default intervals" },
+        "whatsappTemplateEn": { "type": "string", "maxLength": 1000, "description": "English WhatsApp reminder template" },
+        "whatsappTemplateTa": { "type": "string", "maxLength": 1000, "description": "Tamil WhatsApp reminder template" },
+        "whatsappStatus": { "type": "string", "enum": ["not_configured", "configured", "connected", "disabled", "error"], "description": "WhatsApp Cloud API integration status" },
+        "whatsappPhoneNumberId": { "type": "string", "maxLength": 100, "description": "Meta Phone Number ID" },
+        "whatsappBusinessAccountId": { "type": "string", "maxLength": 100, "description": "Meta WABA ID" },
+        "emailStatus": { "type": "string", "enum": ["not_configured", "configured", "connected", "disabled", "error"], "description": "Email provider status" },
+        "scheduledProcessingEnabled": { "type": "boolean", "description": "Whether automatic background processing is active" },
+        "lastScheduledRun": { "type": "string", "maxLength": 40, "description": "Timestamp of last batch cycle" },
+        "ownerId": { "type": "string", "maxLength": 128, "description": "Owner user UID" },
+        "updatedAt": { "type": "string", "maxLength": 40, "description": "Last update timestamp" }
+      },
+      "required": ["businessName", "ownerId"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "System audit trail for customer and service operations",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "maxLength": 80, "description": "Audit action type" },
+        "details": { "type": "string", "maxLength": 500, "description": "Descriptive summary" },
+        "entityType": { "type": "string", "maxLength": 50, "description": "Customer, ServiceRecord, Reminder, Settings" },
+        "entityId": { "type": "string", "maxLength": 128, "description": "Referenced entity document ID" },
+        "ownerId": { "type": "string", "maxLength": 128, "description": "Owner user UID" },
+        "timestamp": { "type": "string", "maxLength": 40, "description": "Event timestamp" }
+      },
+      "required": ["action", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/customers/{customerId}": {
+      "schema": { "$ref": "Customer" },
+      "description": "Collection of RO purifier customers"
+    },
+    "/serviceRecords/{serviceRecordId}": {
+      "schema": { "$ref": "ServiceRecord" },
+      "description": "Permanent service visit histories"
+    },
+    "/reminders/{reminderId}": {
+      "schema": { "$ref": "Reminder" },
+      "description": "Service reminder queue items"
+    },
+    "/messageAttempts/{attemptId}": {
+      "schema": { "$ref": "MessageAttempt" },
+      "description": "Idempotent log of WhatsApp dispatches"
+    },
+    "/ownerReports/{reportId}": {
+      "schema": { "$ref": "OwnerReport" },
+      "description": "Daily digest summaries generated for the owner"
+    },
+    "/settings/{settingsId}": {
+      "schema": { "$ref": "Settings" },
+      "description": "Application business settings and gateway configurations"
+    },
+    "/auditEvents/{eventId}": {
+      "schema": { "$ref": "AuditEvent" },
+      "description": "Audit trail log"
+    }
+  }
+}

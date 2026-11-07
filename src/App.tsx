@@ -1,0 +1,512 @@
+import React, { lazy, Suspense, useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { Sidebar, ActiveTab } from './components/Sidebar';
+import { Navbar } from './components/Navbar';
+import { MobileNav } from './components/MobileNav';
+
+// Modals
+import { CustomerModal } from './components/CustomerModal';
+import { CustomerDetailDrawer } from './components/CustomerDetailDrawer';
+import { RecordServiceModal } from './components/RecordServiceModal';
+import { ReminderActionModal } from './components/ReminderActionModal';
+import { DirectWhatsAppPreviewModal } from './components/DirectWhatsAppPreviewModal';
+import { DailyReportModal } from './components/DailyReportModal';
+import { SeedDataModal } from './components/SeedDataModal';
+
+// Pages
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
+const CustomersPage = lazy(() => import('./pages/CustomersPage').then((module) => ({ default: module.CustomersPage })));
+const ServiceHistoryPage = lazy(() => import('./pages/ServiceHistoryPage').then((module) => ({ default: module.ServiceHistoryPage })));
+const RemindersQueuePage = lazy(() => import('./pages/RemindersQueuePage').then((module) => ({ default: module.RemindersQueuePage })));
+const DailyReportsPage = lazy(() => import('./pages/DailyReportsPage').then((module) => ({ default: module.DailyReportsPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const AutomatedTestsPage = lazy(() => import('./pages/AutomatedTestsPage').then((module) => ({ default: module.AutomatedTestsPage })));
+
+// Types and Services
+import {
+  Customer,
+  ServiceRecord,
+  Reminder,
+  MessageAttempt,
+  AppSettings,
+  OwnerReport,
+} from './types';
+import {
+  subscribeCustomers,
+  subscribeServiceRecords,
+  subscribeReminders,
+  subscribeMessageAttempts,
+  subscribeMessageDeliveryStatus,
+  subscribeSettings,
+  subscribeOwnerReports,
+  addCustomer,
+  updateCustomer,
+  archiveCustomer,
+  restoreCustomer,
+  recordCompletedService,
+  rescheduleReminder,
+  togglePauseReminder,
+  markReminderContactedManually,
+  saveSettings,
+  seedSampleData,
+  purgeSampleData,
+} from './services/dbService';
+import { testFirestoreConnection } from './lib/firebase';
+import { runDailyBatch } from './services/apiService';
+import { BUSINESS_OWNER_ID, DEFAULT_SETTINGS } from './lib/constants';
+import { getTodayKolkata, getDaysUntilDate } from './utils/dateUtils';
+import { Droplets, LogIn, ShieldAlert, Sparkles } from 'lucide-react';
+
+function AquaPlusApp() {
+  const { currentUser, loading: authLoading, signInWithGoogle, logOut, isOwner, authError } = useAuth();
+
+  // App Navigation
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Firestore Data State
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [messageAttempts, setMessageAttempts] = useState<MessageAttempt[]>([]);
+  const [deliveryStatuses, setDeliveryStatuses] = useState<{ providerMessageId: string; status: 'sent' | 'delivered' | 'read' | 'failed' }[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [ownerReports, setOwnerReports] = useState<OwnerReport[]>([]);
+
+  // Modals state
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
+  const [selectedCustomerForDetail, setSelectedCustomerForDetail] = useState<Customer | null>(null);
+
+  const [isRecordServiceModalOpen, setIsRecordServiceModalOpen] = useState(false);
+  const [preselectedCustomerForService, setPreselectedCustomerForService] = useState<Customer | null>(null);
+
+  const [selectedReminderForAction, setSelectedReminderForAction] = useState<Reminder | null>(null);
+  const [reminderForWhatsApp, setReminderForWhatsApp] = useState<Reminder | null>(null);
+  const [customerForWhatsApp, setCustomerForWhatsApp] = useState<Customer | null>(null);
+
+  const [selectedReportForView, setSelectedReportForView] = useState<OwnerReport | null>(null);
+  const [isSeedModalOpen, setIsSeedModalOpen] = useState(false);
+  const [batchRunning, setBatchRunning] = useState(false);
+
+  // Test Firestore Connection on boot
+  useEffect(() => {
+    testFirestoreConnection();
+  }, []);
+
+  // Subscribe to real-time collections ONLY when authenticated
+  useEffect(() => {
+    if (authLoading || !currentUser || !isOwner) return;
+
+    const effectiveOwnerId = BUSINESS_OWNER_ID;
+
+    const unsubCustomers = subscribeCustomers(effectiveOwnerId, setCustomers);
+    const unsubServices = subscribeServiceRecords(effectiveOwnerId, setServiceRecords);
+    const unsubReminders = subscribeReminders(effectiveOwnerId, setReminders);
+    const unsubMessages = subscribeMessageAttempts(effectiveOwnerId, setMessageAttempts);
+    const unsubDelivery = subscribeMessageDeliveryStatus(effectiveOwnerId, setDeliveryStatuses);
+    const unsubSettings = subscribeSettings(effectiveOwnerId, setSettings);
+    const unsubReports = subscribeOwnerReports(effectiveOwnerId, setOwnerReports);
+
+    return () => {
+      unsubCustomers();
+      unsubServices();
+      unsubReminders();
+      unsubMessages();
+      unsubDelivery();
+      unsubSettings();
+      unsubReports();
+    };
+  }, [currentUser, authLoading, isOwner]);
+
+  const attemptsWithDelivery = messageAttempts.map((attempt) => ({
+    ...attempt,
+    providerDeliveryStatus: deliveryStatuses.find((delivery) => delivery.providerMessageId === attempt.providerMessageId)?.status,
+  }));
+
+  // Sync selectedCustomerForDetail when customers list updates
+  useEffect(() => {
+    if (selectedCustomerForDetail) {
+      const updated = customers.find((c) => c.id === selectedCustomerForDetail.id);
+      if (updated) setSelectedCustomerForDetail(updated);
+    }
+  }, [customers]);
+
+  const hasSampleData = customers.some((c) => c.isSampleData);
+
+  // Reminders badges
+  const todayStr = getTodayKolkata();
+  const dueTodayCount = reminders.filter(
+    (r) => r.reminderDate === todayStr && r.status !== 'superseded' && r.status !== 'sent' && r.status !== 'contacted_manually' && r.status !== 'paused'
+  ).length;
+  const overdueCount = reminders.filter(
+    (r) => getDaysUntilDate(r.reminderDate) < 0 && r.status !== 'superseded' && r.status !== 'sent' && r.status !== 'contacted_manually' && r.status !== 'paused'
+  ).length;
+
+  // Handlers
+  const handleOpenAddCustomer = () => {
+    setCustomerToEdit(null);
+    setIsCustomerModalOpen(true);
+  };
+
+  const handleEditCustomer = (cust: Customer) => {
+    setCustomerToEdit(cust);
+    setIsCustomerModalOpen(true);
+  };
+
+  const handleSaveCustomer = async (data: any) => {
+    const effectiveOwnerId = BUSINESS_OWNER_ID;
+    if (customerToEdit) {
+      await updateCustomer(customerToEdit.id, data, effectiveOwnerId);
+    } else {
+      await addCustomer(data, effectiveOwnerId);
+    }
+  };
+
+  const handleOpenRecordService = (targetCustomer?: Customer | null) => {
+    setPreselectedCustomerForService(targetCustomer || null);
+    setIsRecordServiceModalOpen(true);
+  };
+
+  const handleSaveServiceRecord = async (recordData: any, customer: Customer) => {
+    const effectiveOwnerId = BUSINESS_OWNER_ID;
+    await recordCompletedService(recordData, effectiveOwnerId, customer);
+  };
+
+  const handleArchiveToggle = async (customer: Customer) => {
+    const effectiveOwnerId = BUSINESS_OWNER_ID;
+    if (customer.status === 'archived') {
+      await restoreCustomer(customer.id, effectiveOwnerId);
+    } else {
+      await archiveCustomer(customer.id, effectiveOwnerId);
+    }
+  };
+
+  const handleCustomerPauseToggle = async (customer: Customer) => {
+    const effectiveOwnerId = BUSINESS_OWNER_ID;
+    const isPaused = !customer.remindersPaused;
+    await updateCustomer(customer.id, { remindersPaused: isPaused }, effectiveOwnerId);
+  };
+
+  const handleTriggerDailyBatch = async () => {
+    setBatchRunning(true);
+    try {
+      const batchResult = await runDailyBatch();
+      const message = batchResult.status === 'already_completed'
+        ? `Today's batch was already completed.\nReport Date: ${batchResult.reportDate}`
+        : batchResult.status === 'reconciliation_required' || batchResult.status === 'partial_failure'
+          ? `Batch requires manual reconciliation. ${batchResult.persistenceFailures || 0} dispatch result(s) could not be saved; ${batchResult.unknownOutcomes || 0} provider outcome(s) are unknown. Ambiguous messages will not be resent automatically.\nReport Date: ${batchResult.reportDate}`
+        : batchResult.status === 'not_configured'
+          ? 'WhatsApp is not configured on the server. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID, then run the batch again.'
+        : batchResult.status === 'disabled'
+          ? 'Scheduled processing is disabled in settings.'
+          : `Daily batch completed.\n\nEligible Reminders: ${batchResult.eligibleCount}\nMessages accepted by provider: ${batchResult.messagesSent}\nMessages Failed: ${batchResult.messagesFailed}\nSkipped: ${batchResult.skippedCount}\nEmail: ${batchResult.emailDeliveryStatus || 'not_configured'}\nReport Date: ${batchResult.reportDate}`;
+      alert(message);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Batch processing error: ${err.message}`);
+    } finally {
+      setBatchRunning(false);
+    }
+  };
+
+  // If user is not logged in, render the login & welcome portal
+  if (!currentUser || !isOwner) {
+    return (
+      <div className="min-h-screen bg-[#0A1D1E] text-slate-100 flex flex-col justify-center items-center p-4 selection:bg-teal-500 selection:text-white">
+        <div className="w-full max-w-md bg-[#0F292B] border border-[#1B3E42] rounded-2xl p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-20 h-20 rounded-full bg-white border-2 border-cyan-300 flex items-center justify-center mx-auto shadow-lg overflow-hidden">
+              <img src="/aqua-plus-logo.jpg" alt="Aqua Plus RO Tech" className="w-full h-full object-contain" />
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              AquaPlus Service
+            </h1>
+            <p className="text-xs text-teal-300 font-medium">
+              Aqua Plus RO Tech • Thirunagar 5th Stop, Madurai
+            </p>
+          </div>
+
+          <div className="bg-[#143538] p-4 rounded-xl border border-[#1E484C] text-xs text-slate-300 space-y-1.5 leading-relaxed">
+            <p className="font-semibold text-white flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-teal-400" />
+              {currentUser ? 'Access Restricted' : 'Owner-Only Authorization Portal'}
+            </p>
+            <p>
+              {currentUser
+                ? 'This Google account is not authorized for Aqua Plus business records. Sign out and use an authorized business account.'
+                : 'This application manages proprietary customer records, RO purifier service histories, and automated reminder schedules for authorized business operations.'}
+            </p>
+          </div>
+
+          {authError && (
+            <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-lg text-rose-200 text-xs">
+              {authError}
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={currentUser ? logOut : signInWithGoogle}
+              disabled={authLoading}
+              className="w-full py-3 px-4 bg-teal-500 hover:bg-teal-400 text-[#0F292B] font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2.5 transition-all transform active:scale-98 disabled:opacity-50"
+            >
+              <LogIn className="w-5 h-5" />
+              <span>{authLoading ? 'Verifying Credentials...' : currentUser ? 'Sign Out' : 'Sign In with Business Account'}</span>
+            </button>
+          </div>
+
+          <div className="text-center pt-2">
+            <p className="text-[11px] text-teal-400/60 font-mono">
+              Authorized business accounts only
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FAF8F3] text-[#1B2421] flex flex-col antialiased">
+      {/* Desktop Sidebar */}
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
+        dueTodayCount={dueTodayCount}
+        overdueCount={overdueCount}
+      />
+
+      {/* Main App Layout */}
+      <div
+        className={`flex-1 flex flex-col transition-all duration-200 ${
+          sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
+        } pb-16 md:pb-6`}
+      >
+        {/* Navbar */}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onOpenAddCustomer={handleOpenAddCustomer}
+          onOpenRecordService={() => handleOpenRecordService()}
+          onOpenSeedDataModal={() => setIsSeedModalOpen(true)}
+          hasSampleData={hasSampleData}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 p-4 lg:p-6 max-w-7xl w-full mx-auto">
+          <Suspense fallback={<div className="py-12 text-center text-sm text-[#5C6E67]">Loading workspace…</div>}>
+          {activeTab === 'dashboard' && (
+            <DashboardPage
+              customers={customers}
+              serviceRecords={serviceRecords}
+              reminders={reminders}
+              messageAttempts={attemptsWithDelivery}
+              setActiveTab={setActiveTab}
+              onOpenAddCustomer={handleOpenAddCustomer}
+              onOpenRecordService={() => handleOpenRecordService()}
+              onOpenCustomerDetail={(cust) => setSelectedCustomerForDetail(cust)}
+              onTriggerDailyBatch={handleTriggerDailyBatch}
+              batchRunning={batchRunning}
+            />
+          )}
+
+          {activeTab === 'customers' && (
+            <CustomersPage
+              customers={customers}
+              serviceRecords={serviceRecords}
+              reminders={reminders}
+              onOpenAddCustomer={handleOpenAddCustomer}
+              onEditCustomer={handleEditCustomer}
+              onOpenCustomerDetail={(cust) => setSelectedCustomerForDetail(cust)}
+              onRecordServiceForCustomer={(cust) => handleOpenRecordService(cust)}
+              onArchiveToggle={handleArchiveToggle}
+              initialSearch={searchQuery}
+            />
+          )}
+
+          {activeTab === 'record_service' && (
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-3">
+                <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded-full flex items-center justify-center mx-auto text-teal-700">
+                  <Droplets className="w-6 h-6" />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">Record Service Visit</h2>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Log a completed maintenance visit at a customer's location in Madurai, calculate the next reminder date, and record spare parts charges.
+                </p>
+                <button
+                  onClick={() => handleOpenRecordService()}
+                  className="px-5 py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-lg shadow-sm"
+                >
+                  Open Record Service Form
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'service_history' && (
+            <ServiceHistoryPage
+              serviceRecords={serviceRecords}
+              customers={customers}
+              onOpenCustomerDetail={(cust) => setSelectedCustomerForDetail(cust)}
+            />
+          )}
+
+          {activeTab === 'reminders' && (
+            <RemindersQueuePage
+              reminders={reminders}
+              customers={customers}
+              serviceRecords={serviceRecords}
+              messageAttempts={attemptsWithDelivery}
+              onOpenCustomerDetail={(cust) => setSelectedCustomerForDetail(cust)}
+              onOpenReminderAction={(rem) => setSelectedReminderForAction(rem)}
+              onOpenWhatsAppPreview={(rem, cust) => {
+                setReminderForWhatsApp(rem);
+                setCustomerForWhatsApp(cust);
+              }}
+            />
+          )}
+
+          {activeTab === 'daily_reports' && (
+            <DailyReportsPage
+              reports={ownerReports}
+              settings={settings}
+              onRunBatch={handleTriggerDailyBatch}
+              onOpenReport={(rpt) => setSelectedReportForView(rpt)}
+              batchRunning={batchRunning}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsPage
+              settings={settings}
+              onSaveSettings={async (updated) => {
+                const effectiveOwnerId = BUSINESS_OWNER_ID;
+                await saveSettings(updated, effectiveOwnerId);
+              }}
+              customers={customers}
+              serviceRecords={serviceRecords}
+              onOpenSeedDataModal={() => setIsSeedModalOpen(true)}
+              hasSampleData={hasSampleData}
+            />
+          )}
+
+          {activeTab === 'automated_tests' && <AutomatedTestsPage />}
+          </Suspense>
+        </main>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenAddCustomer={handleOpenAddCustomer}
+        onOpenRecordService={() => handleOpenRecordService()}
+        pendingCount={dueTodayCount + overdueCount}
+      />
+
+      {/* MODALS */}
+      <CustomerModal
+        isOpen={isCustomerModalOpen}
+        onClose={() => setIsCustomerModalOpen(false)}
+        onSave={handleSaveCustomer}
+        existingCustomers={customers}
+        customerToEdit={customerToEdit}
+      />
+
+      <CustomerDetailDrawer
+        customer={selectedCustomerForDetail}
+        onClose={() => setSelectedCustomerForDetail(null)}
+        serviceHistory={serviceRecords.filter((s) => s.customerId === selectedCustomerForDetail?.id)}
+        reminders={reminders.filter((r) => r.customerId === selectedCustomerForDetail?.id)}
+        onEdit={(cust) => {
+          setSelectedCustomerForDetail(null);
+          handleEditCustomer(cust);
+        }}
+        onRecordServiceForCustomer={(cust) => {
+          setSelectedCustomerForDetail(null);
+          handleOpenRecordService(cust);
+        }}
+        onArchiveToggle={handleArchiveToggle}
+        onPauseToggle={handleCustomerPauseToggle}
+      />
+
+      <RecordServiceModal
+        isOpen={isRecordServiceModalOpen}
+        onClose={() => setIsRecordServiceModalOpen(false)}
+        customers={customers.filter((c) => c.status === 'active')}
+        preselectedCustomer={preselectedCustomerForService}
+        onSave={handleSaveServiceRecord}
+      />
+
+      <ReminderActionModal
+        isOpen={!!selectedReminderForAction}
+        onClose={() => setSelectedReminderForAction(null)}
+        reminder={selectedReminderForAction}
+        onReschedule={async (remId, custId, newDate, reason) => {
+          const effectiveOwnerId = BUSINESS_OWNER_ID;
+          await rescheduleReminder(remId, custId, newDate, reason, effectiveOwnerId);
+        }}
+        onPauseToggle={async (remId, custId, isPaused) => {
+          const effectiveOwnerId = BUSINESS_OWNER_ID;
+          await togglePauseReminder(remId, custId, isPaused, effectiveOwnerId);
+        }}
+        onMarkManualContact={async (remId, notes) => {
+          const effectiveOwnerId = BUSINESS_OWNER_ID;
+          await markReminderContactedManually(remId, notes, effectiveOwnerId);
+        }}
+        onOpenWhatsAppPreview={(rem) => {
+          const c = customers.find((cust) => cust.id === rem.customerId);
+          if (c) {
+            setReminderForWhatsApp(rem);
+            setCustomerForWhatsApp(c);
+          }
+        }}
+      />
+
+      <DirectWhatsAppPreviewModal
+        isOpen={!!reminderForWhatsApp && !!customerForWhatsApp}
+        onClose={() => {
+          setReminderForWhatsApp(null);
+          setCustomerForWhatsApp(null);
+        }}
+        reminder={reminderForWhatsApp}
+        customer={customerForWhatsApp}
+        settings={settings}
+      />
+
+      <DailyReportModal
+        isOpen={!!selectedReportForView}
+        onClose={() => setSelectedReportForView(null)}
+        report={selectedReportForView}
+      />
+
+      <SeedDataModal
+        isOpen={isSeedModalOpen}
+        onClose={() => setIsSeedModalOpen(false)}
+        hasSampleData={hasSampleData}
+        onSeedData={async () => {
+          const effectiveOwnerId = BUSINESS_OWNER_ID;
+          await seedSampleData(effectiveOwnerId);
+        }}
+        onPurgeData={async () => {
+          const effectiveOwnerId = BUSINESS_OWNER_ID;
+          return await purgeSampleData(customers, serviceRecords, reminders, effectiveOwnerId);
+        }}
+      />
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AquaPlusApp />
+    </AuthProvider>
+  );
+}
