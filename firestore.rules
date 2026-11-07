@@ -104,6 +104,24 @@ service cloud.firestore {
              data.ownerId is string && data.ownerId.size() <= 128;
     }
 
+    // InventoryItem Validation
+    function isValidInventoryItem(data) {
+      return data.keys().hasOnly(['id', 'name', 'category', 'quantity', 'lowStockThreshold', 'unitCost', 'sellingPrice', 'storageLocation', 'notes', 'isSampleData', 'ownerId', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.category in ['spun_filter', 'ro_membrane', 'sediment_filter', 'carbon_block', 'post_carbon', 'booster_pump', 'smps_adapter', 'flow_restrictor', 'fittings_tubing', 'other'] &&
+             data.quantity is number && data.quantity >= 0 && data.quantity <= 100000 &&
+             data.lowStockThreshold is number && data.lowStockThreshold >= 0 && data.lowStockThreshold <= 100000 &&
+             data.unitCost is number && data.unitCost >= 0 && data.unitCost <= 1000000 &&
+             data.sellingPrice is number && data.sellingPrice >= 0 && data.sellingPrice <= 1000000 &&
+             data.ownerId is string && data.ownerId.size() <= 128 &&
+             data.createdAt is string && data.createdAt.size() <= 35 &&
+             data.updatedAt is string && data.updatedAt.size() <= 35 &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             (!('storageLocation' in data) || (data.storageLocation is string && data.storageLocation.size() <= 100)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+             (!('isSampleData' in data) || (data.isSampleData is bool));
+    }
+
     // Collections
     match /customers/{customerId} {
       allow get: if isValidId(customerId) && isOwner(existing().ownerId);
@@ -205,6 +223,20 @@ service cloud.firestore {
                       isValidAuditEvent(incoming());
       allow update: if false; // Audit logs are immutable
       allow delete: if false; // Audit logs cannot be deleted
+    }
+
+    match /inventory/{itemId} {
+      allow get: if isValidId(itemId) && isOwner(existing().ownerId);
+      allow list: if isAuthorizedOwnerAccount();
+      allow create: if isValidId(itemId) &&
+                      isOwner(incoming().ownerId) &&
+                      isValidInventoryItem(incoming());
+      allow update: if isValidId(itemId) &&
+                      isOwner(existing().ownerId) &&
+                      incoming().ownerId == existing().ownerId &&
+                      incoming().get('isSampleData', false) == existing().get('isSampleData', false) &&
+                      isValidInventoryItem(incoming());
+      allow delete: if isValidId(itemId) && isOwner(existing().ownerId);
     }
   }
 }

@@ -12,7 +12,7 @@ import {
   Droplets,
   AlertCircle,
 } from 'lucide-react';
-import { Customer, ServiceCategory, PaymentStatus, ServiceRecord } from '../types';
+import { Customer, ServiceCategory, PaymentStatus, ServiceRecord, InventoryItem } from '../types';
 import { DEFAULT_SERVICE_CATEGORIES } from '../lib/constants';
 import { calculateNextReminderDate, formatDisplayDate, getTodayKolkata } from '../utils/dateUtils';
 
@@ -21,9 +21,11 @@ interface RecordServiceModalProps {
   onClose: () => void;
   customers: Customer[];
   preselectedCustomer?: Customer | null;
+  inventory?: InventoryItem[];
   onSave: (
     recordData: Omit<ServiceRecord, 'id' | 'createdAt' | 'updatedAt' | 'ownerId'>,
-    customer: Customer
+    customer: Customer,
+    usedParts?: { itemId: string; quantity: number }[]
   ) => Promise<void>;
 }
 
@@ -32,6 +34,7 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
   onClose,
   customers,
   preselectedCustomer,
+  inventory = [],
   onSave,
 }) => {
   const today = getTodayKolkata();
@@ -56,6 +59,7 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
   const [isDateOverridden, setIsDateOverridden] = useState<boolean>(false);
   const [manualOverrideDate, setManualOverrideDate] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const [usedParts, setUsedParts] = useState<{ itemId: string; quantity: number }[]>([]);
 
   const formSteps = [
     { short: 'Visit', full: 'Customer and visit details' },
@@ -129,6 +133,22 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
     }
   };
 
+  const handleSelectInventoryPart = (invItem: InventoryItem) => {
+    if (!filtersReplaced.includes(invItem.name)) {
+      setFiltersReplaced((prev) => (prev ? `${prev}, ${invItem.name}` : invItem.name));
+    }
+    setUsedParts((prev) => {
+      const existing = prev.find((p) => p.itemId === invItem.id);
+      if (existing) {
+        return prev.map((p) => (p.itemId === invItem.id ? { ...p, quantity: p.quantity + 1 } : p));
+      }
+      return [...prev, { itemId: invItem.id, quantity: 1 }];
+    });
+    if (invItem.sellingPrice > 0) {
+      setPartsCharge((prev) => Math.max(0, (Number(prev) || 0) + invItem.sellingPrice));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCustomer) {
@@ -168,7 +188,8 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
           nextReminderDate: finalNextReminderDate,
           isDateOverridden,
         },
-        activeCustomer
+        activeCustomer,
+        usedParts
       );
       setSavedRecord({ customerName: activeCustomer.fullName, reminderDate: finalNextReminderDate });
     } catch (err: any) {
@@ -179,6 +200,7 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
     }
   };
 
+  
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0C231F]/65 backdrop-blur-xs overflow-y-auto">
       <div className="relative w-full max-w-2xl bg-[#FAF8F3] rounded-2xl shadow-2xl border border-[#DDD6C5] overflow-hidden my-6 max-h-[92vh] flex flex-col">
@@ -358,6 +380,45 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
                 placeholder="e.g. 5-Micron Spun PP, Pre-Carbon 10 inch, FR 450"
                 className="w-full px-3 py-2 bg-[#FAF8F3] border border-[#DDD6C5] rounded-md text-[#1B2421]"
               />
+
+              {/* Store Inventory Spare Parts Picker */}
+              {inventory.length > 0 && (
+                <div className="pt-2 border-t border-[#DDD6C5]/60 mt-2 space-y-1.5">
+                  <span className="text-[10px] font-semibold text-[#0C231F] block">
+                    Available Store Inventory (Select to add & deduct stock):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1 bg-[#FAF8F3] rounded border border-[#DDD6C5]">
+                    {inventory.map((inv) => {
+                      const isUsed = usedParts.some((p) => p.itemId === inv.id);
+                      const usedQty = usedParts.find((p) => p.itemId === inv.id)?.quantity || 0;
+                      return (
+                        <button
+                          key={inv.id}
+                          type="button"
+                          onClick={() => handleSelectInventoryPart(inv)}
+                          disabled={inv.quantity <= 0}
+                          className={`px-2.5 py-1 text-[11px] rounded border transition-colors flex items-center gap-1 ${
+                            isUsed
+                              ? 'bg-[#163830] text-[#FAF8F3] border-[#163830]'
+                              : inv.quantity <= 0
+                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                : 'bg-white hover:bg-[#FAF8F3] text-[#1F2421] border-[#DDD6C5]'
+                          }`}
+                          title={`Available: ${inv.quantity} in stock`}
+                        >
+                          <span>{inv.name}</span>
+                          <span className="font-mono text-[10px] text-[#C25E00] font-bold">₹{inv.sellingPrice}</span>
+                          {isUsed && (
+                            <span className="ml-1 px-1 py-0.2 bg-[#7EE787] text-[#0C231F] rounded-full text-[9px] font-bold">
+                              ×{usedQty}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Quick Component Tags */}
               <div className="flex flex-wrap items-center gap-1.5 pt-2">

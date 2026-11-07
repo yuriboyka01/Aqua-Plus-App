@@ -12,6 +12,7 @@ import { normalizePhoneNumber } from '../utils/businessLogic.ts';
 import { generateIdempotencyKey } from '../utils/businessLogic.ts';
 import { getTodayKolkata } from '../utils/dateUtils.ts';
 import { isAllowedOrigin } from '../utils/apiUtils.ts';
+import { getGeminiVisionStatus, scanInventoryWithGeminiVision } from './geminiVisionAdapter.ts';
 
 const OWNER_EMAILS = new Set(
   (process.env.OWNER_EMAILS || '')
@@ -23,6 +24,7 @@ const rateLimit = new Map<string, { startedAt: number; count: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 8;
 const BODY_LIMIT_BYTES = 16_384;
+const INVENTORY_SCAN_BODY_LIMIT_BYTES = 10 * 1024 * 1024;
 const WEBHOOK_BODY_LIMIT_BYTES = 262_144;
 
 type AuthenticatedOwner = { uid: string; email: string };
@@ -67,13 +69,13 @@ function isRateLimited(uid: string): boolean {
   return current.count > RATE_LIMIT_MAX;
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJsonBody(req: IncomingMessage, limit = BODY_LIMIT_BYTES): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > BODY_LIMIT_BYTES) throw new Error('Request body is too large.');
+    if (size > limit) throw new Error('Request body is too large.');
     chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString('utf8');
@@ -202,6 +204,7 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
         sendJson(res, 200, {
           whatsapp: getWhatsAppIntegrationStatus(),
           email: getEmailIntegrationStatus(),
+          gemini: getGeminiVisionStatus(),
         });
         return;
       }
@@ -323,6 +326,19 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
           reportDate: new Date().toISOString().slice(0, 10),
         });
         sendJson(res, result.success ? 200 : 502, result);
+        return;
+      }
+
+      if (url.pathname === '/api/inventory/scan' && req.method === 'POST') {
+        const body = await readJsonBody(req, INVENTORY_SCAN_BODY_LIMIT_BYTES);
+        const imageBase64 = typeof body.imageBase64 === 'string' ? body.imageBase64 : '';
+        const mimeType = typeof body.mimeType === 'string' ? body.mimeType : 'image/jpeg';
+        if (!imageBase64) {
+          sendJson(res, 400, { error: 'imageBase64 is required.' });
+          return;
+        }
+        const result = await scanInventoryWithGeminiVision({ imageBase64, mimeType });
+        sendJson(res, 200, result);
         return;
       }
 

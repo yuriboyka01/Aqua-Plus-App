@@ -14,12 +14,14 @@ import {
   Droplets,
   LogOut,
   MapPin,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export type ActiveTab =
   | 'dashboard'
   | 'customers'
+  | 'inventory'
   | 'record_service'
   | 'service_history'
   | 'reminders'
@@ -34,6 +36,7 @@ interface SidebarProps {
   setCollapsed: (collapsed: boolean) => void;
   dueTodayCount: number;
   overdueCount: number;
+  inventoryLowStockCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -43,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setCollapsed,
   dueTodayCount,
   overdueCount,
+  inventoryLowStockCount = 0,
 }) => {
   const { currentUser, logOut, signInWithGoogle } = useAuth();
   const [showMore, setShowMore] = React.useState(false);
@@ -61,6 +65,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       sublabel: 'Customer directory',
       icon: Users,
       badge: null,
+    },
+    {
+      id: 'inventory' as ActiveTab,
+      label: 'Inventory',
+      sublabel: 'Parts & stock levels',
+      icon: Package,
+      badge: inventoryLowStockCount > 0 ? `${inventoryLowStockCount} low` : null,
+      badgeColor: 'text-[#F6D285]',
     },
     {
       id: 'record_service' as ActiveTab,
@@ -107,8 +119,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'text-[#9EE8C8]',
     },
   ];
-  const primaryItems = navItems.slice(0, 5);
-  const secondaryItems = navItems.slice(5);
+  const primaryItems = navItems.slice(0, 6);
+  const secondaryItems = navItems.slice(6);
   const renderNavItem = (item: (typeof navItems)[number]) => {
     const Icon = item.icon;
     const isActive = activeTab === item.id;

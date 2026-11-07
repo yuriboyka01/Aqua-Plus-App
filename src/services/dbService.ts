@@ -7,6 +7,8 @@ import {
   onSnapshot,
   writeBatch,
   getDocs,
+  getDoc,
+  runTransaction,
   query,
   where,
 } from 'firebase/firestore';
@@ -19,8 +21,10 @@ import {
   AppSettings,
   OwnerReport,
   AuditEvent,
+  AuditEntityType,
+  InventoryItem,
 } from '../types';
-import { DEFAULT_SETTINGS } from '../lib/constants';
+import { BUSINESS_OWNER_ID, DEFAULT_SETTINGS } from '../lib/constants';
 import { calculateNextReminderDate, getTodayKolkata } from '../utils/dateUtils';
 import { shouldSupersedeReminder } from '../utils/businessLogic';
 
@@ -594,7 +598,7 @@ export function subscribeAuditEvents(
 export async function recordAuditEvent(
   action: string,
   details: string,
-  entityType: 'Customer' | 'ServiceRecord' | 'Reminder' | 'Settings' | 'BatchScheduler',
+  entityType: AuditEntityType,
   entityId: string,
   ownerId: string
 ): Promise<void> {
@@ -619,6 +623,406 @@ export async function recordAuditEvent(
 }
 
 // -------------------------------------------------------------
+// INVENTORY
+// -------------------------------------------------------------
+
+export function subscribeInventory(
+  ownerIdOrCallback: string | ((items: InventoryItem[]) => void),
+  callbackOrOnError?: ((items: InventoryItem[]) => void) | ((err: any) => void),
+  onErrorFn?: (err: any) => void
+): () => void {
+  let ownerId: string;
+  let callback: (items: InventoryItem[]) => void;
+  let onError: ((err: any) => void) | undefined;
+
+  if (typeof ownerIdOrCallback === 'function') {
+    ownerId = BUSINESS_OWNER_ID;
+    callback = ownerIdOrCallback;
+    onError = typeof callbackOrOnError === 'function' ? (callbackOrOnError as (err: any) => void) : undefined;
+  } else {
+    ownerId = ownerIdOrCallback || BUSINESS_OWNER_ID;
+    callback = callbackOrOnError as (items: InventoryItem[]) => void;
+    onError = onErrorFn;
+  }
+
+  // Support guest owner / offline demo preview
+  if (!ownerId || ownerId === 'guest_owner') {
+    if (callback) {
+      callback(getInitialSampleInventory(ownerId || 'guest_owner'));
+    }
+    return () => {};
+  }
+
+  const path = 'inventory';
+  const q = collection(db, path);
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: InventoryItem[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ id: docSnap.id, ...docSnap.data() } as InventoryItem);
+      });
+      // Sort alphabetically by spare part name
+      items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      callback(items);
+    },
+    (error) => {
+      console.warn(`Firestore subscription notice [${path}]:`, error.message);
+      if (onError) onError(error);
+    }
+  );
+}
+
+export async function addInventoryItem(
+  data: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'ownerId'> & { id?: string; createdAt?: string; updatedAt?: string; ownerId?: string },
+  ownerId: string = BUSINESS_OWNER_ID
+): Promise<string> {
+  const path = 'inventory';
+  const nowIso = new Date().toISOString();
+
+  const docRef = data.id
+    ? doc(db, path, data.id)
+    : doc(collection(db, path));
+  const docId = docRef.id;
+
+  const newItem: InventoryItem = {
+    ...data,
+    id: docId,
+    ownerId: data.ownerId || ownerId,
+    quantity: Math.max(0, Number(data.quantity) || 0),
+    lowStockThreshold: Math.max(0, Number(data.lowStockThreshold) || 0),
+    unitCost: Math.max(0, Number(data.unitCost) || 0),
+    sellingPrice: Math.max(0, Number(data.sellingPrice) || 0),
+    storageLocation: data.storageLocation?.trim() || undefined,
+    notes: data.notes?.trim() || undefined,
+    createdAt: data.createdAt || nowIso,
+    updatedAt: nowIso,
+  };
+
+  try {
+    await withTimeout(setDoc(docRef, newItem));
+    recordAuditEvent(
+      'INVENTORY_ITEM_CREATED',
+      `Registered spare part "${newItem.name}" (${newItem.category}) with initial quantity of ${newItem.quantity} (unit cost: ₹${newItem.unitCost}, selling: ₹${newItem.sellingPrice})`,
+      'InventoryItem',
+      docId,
+      ownerId
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
+    return docId;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, `${path}/${docId}`);
+  }
+}
+
+export async function updateInventoryItem(
+  itemId: string,
+  updates: Partial<Omit<InventoryItem, 'id' | 'createdAt'>>,
+  ownerId: string = BUSINESS_OWNER_ID
+): Promise<void> {
+  const path = 'inventory';
+  const fullPath = `${path}/${itemId}`;
+  const nowIso = new Date().toISOString();
+
+  const sanitized: Record<string, any> = { ...updates };
+  delete sanitized.id;
+  delete sanitized.createdAt;
+
+  if (sanitized.quantity !== undefined) {
+    sanitized.quantity = Math.max(0, Number(sanitized.quantity) || 0);
+  }
+  if (sanitized.lowStockThreshold !== undefined) {
+    sanitized.lowStockThreshold = Math.max(0, Number(sanitized.lowStockThreshold) || 0);
+  }
+  if (sanitized.unitCost !== undefined) {
+    sanitized.unitCost = Math.max(0, Number(sanitized.unitCost) || 0);
+  }
+  if (sanitized.sellingPrice !== undefined) {
+    sanitized.sellingPrice = Math.max(0, Number(sanitized.sellingPrice) || 0);
+  }
+  if (sanitized.storageLocation !== undefined) {
+    sanitized.storageLocation = sanitized.storageLocation?.trim() || undefined;
+  }
+  if (sanitized.notes !== undefined) {
+    sanitized.notes = sanitized.notes?.trim() || undefined;
+  }
+
+  try {
+    await withTimeout(
+      updateDoc(doc(db, path, itemId), {
+        ...sanitized,
+        updatedAt: nowIso,
+      })
+    );
+    recordAuditEvent(
+      'INVENTORY_ITEM_UPDATED',
+      `Updated inventory details for spare part "${updates.name || itemId}"`,
+      'InventoryItem',
+      itemId,
+      ownerId
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, fullPath);
+  }
+}
+
+export async function adjustInventoryQuantity(
+  itemId: string,
+  delta: number,
+  reason: string = 'Manual stock adjustment',
+  ownerId: string = BUSINESS_OWNER_ID
+): Promise<{ previousQuantity: number; newQuantity: number; clamped: boolean }> {
+  const path = 'inventory';
+  const docRef = doc(db, path, itemId);
+  const nowIso = new Date().toISOString();
+
+  let prevQty = 0;
+  let newQty = 0;
+  let itemName = itemId;
+  let wasClamped = false;
+
+  try {
+    await withTimeout(
+      runTransaction(db, async (transaction) => {
+        const itemSnap = await transaction.get(docRef);
+        if (!itemSnap.exists()) {
+          throw new Error(`Inventory item with ID "${itemId}" was not found.`);
+        }
+        const data = itemSnap.data() as InventoryItem;
+        itemName = data.name || itemId;
+        prevQty = Number(data.quantity) || 0;
+
+        const rawNewQty = prevQty + delta;
+        newQty = Math.max(0, rawNewQty);
+        wasClamped = rawNewQty < 0;
+
+        transaction.update(docRef, {
+          quantity: newQty,
+          updatedAt: nowIso,
+        });
+      })
+    );
+
+    const sign = delta >= 0 ? `+${delta}` : `${delta}`;
+    const clampNote = wasClamped ? ' (clamped to 0 minimum)' : '';
+    await recordAuditEvent(
+      'INVENTORY_STOCK_ADJUSTED',
+      `Stock adjusted for "${itemName}": ${prevQty} -> ${newQty} (${sign})${clampNote}. Reason: ${reason}`,
+      'InventoryItem',
+      itemId,
+      ownerId
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
+
+    return { previousQuantity: prevQty, newQuantity: newQty, clamped: wasClamped };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${path}/${itemId}`);
+  }
+}
+
+export async function deleteInventoryItem(
+  itemId: string,
+  ownerId: string = BUSINESS_OWNER_ID
+): Promise<void> {
+  const path = 'inventory';
+  const fullPath = `${path}/${itemId}`;
+
+  try {
+    await withTimeout(deleteDoc(doc(db, path, itemId)));
+    recordAuditEvent(
+      'INVENTORY_ITEM_DELETED',
+      `Deleted inventory spare part record ${itemId}`,
+      'InventoryItem',
+      itemId,
+      ownerId
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, fullPath);
+  }
+}
+
+export async function getInventoryItem(
+  itemId: string
+): Promise<InventoryItem | null> {
+  const path = 'inventory';
+  try {
+    const snap = await withTimeout(getDoc(doc(db, path, itemId)));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() } as InventoryItem;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, `${path}/${itemId}`);
+  }
+}
+
+export const SAMPLE_INVENTORY_ITEMS: Omit<InventoryItem, 'createdAt' | 'updatedAt'>[] = [
+  {
+    id: 'inv_sample_spun_5u',
+    name: '5µ PP Spun Filter Cartridge (10-inch)',
+    category: 'spun_filter',
+    quantity: 42,
+    lowStockThreshold: 15,
+    unitCost: 45,
+    sellingPrice: 120,
+    storageLocation: 'Bin A-01',
+    notes: 'Standard 10" pre-filter cartridge for outer bowl. Fast-moving consumable; replaced quarterly.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_ro_mem_75',
+    name: '75 GPD TFC Residential RO Membrane',
+    category: 'ro_membrane',
+    quantity: 4,
+    lowStockThreshold: 6,
+    unitCost: 680,
+    sellingPrice: 1450,
+    storageLocation: 'Cabinet B-01',
+    notes: 'High-rejection thin-film composite membrane for domestic units. Low stock warning!',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_ro_mem_100',
+    name: '100 GPD Hi-TDS Commercial RO Membrane',
+    category: 'ro_membrane',
+    quantity: 8,
+    lowStockThreshold: 3,
+    unitCost: 890,
+    sellingPrice: 1850,
+    storageLocation: 'Cabinet B-01',
+    notes: 'Heavy duty membrane for borewell water areas with input TDS exceeding 1500 ppm.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_sediment_10',
+    name: '10" Inline Sediment Filter (Push-Fit)',
+    category: 'sediment_filter',
+    quantity: 24,
+    lowStockThreshold: 8,
+    unitCost: 110,
+    sellingPrice: 260,
+    storageLocation: 'Bin A-02',
+    notes: 'Pre-treatment stage 1 filter inside cabinet. Removes sand, silt, and rust particles.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_carbon_cto',
+    name: '10" CTO Carbon Block Filter Cartridge',
+    category: 'carbon_block',
+    quantity: 19,
+    lowStockThreshold: 8,
+    unitCost: 135,
+    sellingPrice: 290,
+    storageLocation: 'Bin A-03',
+    notes: 'Activated coconut shell carbon block. Adsorbs chlorine, volatile organic compounds, and bad odor.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_post_carbon',
+    name: 'Post Carbon & Silver Nano Taste Enhancer',
+    category: 'post_carbon',
+    quantity: 15,
+    lowStockThreshold: 5,
+    unitCost: 155,
+    sellingPrice: 320,
+    storageLocation: 'Bin A-04',
+    notes: 'Final polishing cartridge for crisp sweet water taste and bacteriostatic protection.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_pump_100gpd',
+    name: '100 GPD 24V DC Diaphragm Booster Pump',
+    category: 'booster_pump',
+    quantity: 0,
+    lowStockThreshold: 3,
+    unitCost: 1150,
+    sellingPrice: 2200,
+    storageLocation: 'Shelf C-01',
+    notes: 'Kemflo/BNQS heavy duty diaphragm booster pump. OUT OF STOCK - urgent distributor PO needed.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_smps_24v',
+    name: '24V 2.5A SMPS DC Power Adapter',
+    category: 'smps_adapter',
+    quantity: 2,
+    lowStockThreshold: 4,
+    unitCost: 320,
+    sellingPrice: 650,
+    storageLocation: 'Shelf C-02',
+    notes: 'Wide voltage range (140V-300V AC) SMPS with built-in surge suppressor. Low stock warning!',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_fr_450',
+    name: 'Flow Restrictor FR-450 (Push-Fit 1/4")',
+    category: 'flow_restrictor',
+    quantity: 5,
+    lowStockThreshold: 6,
+    unitCost: 35,
+    sellingPrice: 110,
+    storageLocation: 'Drawer D-01',
+    notes: '450 cc/min reject water restrictor for 75 GPD domestic RO membranes. Low stock warning!',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_tubing_14',
+    name: '1/4" Food-Grade PE RO Tubing (100m Roll)',
+    category: 'fittings_tubing',
+    quantity: 6,
+    lowStockThreshold: 2,
+    unitCost: 420,
+    sellingPrice: 800,
+    storageLocation: 'Rack E-01',
+    notes: 'NSF certified high-pressure food grade polyethylene tubing for all connections.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_fittings_pack',
+    name: '1/4" Quick-Connect Elbow & Equal Tee Fittings (Pack of 20)',
+    category: 'fittings_tubing',
+    quantity: 14,
+    lowStockThreshold: 5,
+    unitCost: 180,
+    sellingPrice: 360,
+    storageLocation: 'Drawer D-02',
+    notes: 'Push-fit connectors with stainless steel grab ring and EPDM food grade O-rings.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+  {
+    id: 'inv_sample_alkaline_copper',
+    name: 'Copper + Alkaline pH Balancing Mineral Infuser',
+    category: 'other',
+    quantity: 0,
+    lowStockThreshold: 3,
+    unitCost: 380,
+    sellingPrice: 750,
+    storageLocation: 'Bin A-05',
+    notes: 'Enriches RO permeate with essential minerals (Ca, Mg, Cu) and balances pH to 7.5-8.5. OUT OF STOCK.',
+    isSampleData: true,
+    ownerId: 'aquaplus-business',
+  },
+];
+
+export function getInitialSampleInventory(ownerId = 'guest_owner'): InventoryItem[] {
+  const nowIso = new Date().toISOString();
+  return SAMPLE_INVENTORY_ITEMS.map((item) => ({
+    ...item,
+    ownerId,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  }));
+}
+
+// -------------------------------------------------------------
 // SAMPLE DATA SEED & PURGE (Clearly Separated)
 // -------------------------------------------------------------
 
@@ -626,6 +1030,7 @@ export function getInitialSampleDataSet(ownerId = 'guest_owner'): {
   customers: Customer[];
   serviceRecords: ServiceRecord[];
   reminders: Reminder[];
+  inventory: InventoryItem[];
 } {
   const today = getTodayKolkata();
   const nowIso = new Date().toISOString();
@@ -860,7 +1265,8 @@ export function getInitialSampleDataSet(ownerId = 'guest_owner'): {
     },
   ];
 
-  return { customers, serviceRecords, reminders };
+  const inventory = getInitialSampleInventory(ownerId);
+  return { customers, serviceRecords, reminders, inventory };
 }
 
 export async function seedSampleData(ownerId: string): Promise<void> {
@@ -1019,19 +1425,38 @@ export async function seedSampleData(ownerId: string): Promise<void> {
     batch.set(doc(db, 'reminders', remId), remDoc);
   }
 
+  // Inventory sample seeds
+  const sampleInventory = getInitialSampleInventory(ownerId);
+  for (const inv of sampleInventory) {
+    batch.set(doc(db, 'inventory', inv.id), inv);
+  }
+
   await batch.commit();
-  await recordAuditEvent('SAMPLE_DATA_LOADED', 'Seeded Madurai sample customers for testing', 'Customer', 'sample', ownerId);
+  await recordAuditEvent('SAMPLE_DATA_LOADED', 'Seeded Madurai sample customers, service history, and spare parts inventory', 'Customer', 'sample', ownerId);
 }
 
 export async function purgeSampleData(
   customers: Customer[],
   services: ServiceRecord[],
   reminders: Reminder[],
-  ownerId: string
+  ownerId: string,
+  inventory?: InventoryItem[]
 ): Promise<number> {
   const sampleCustIds = customers.filter(c => c.isSampleData).map(c => c.id);
   const sampleSrvIds = services.filter(s => s.isSampleData).map(s => s.id);
   const sampleRemIds = reminders.filter(r => r.isSampleData).map(r => r.id);
+
+  let sampleInvIds: string[] = [];
+  if (inventory && inventory.length > 0) {
+    sampleInvIds = inventory.filter(i => i.isSampleData).map(i => i.id);
+  } else {
+    try {
+      const invSnap = await getDocs(query(collection(db, 'inventory'), where('isSampleData', '==', true)));
+      invSnap.forEach(d => sampleInvIds.push(d.id));
+    } catch (err) {
+      console.warn('Could not query sample inventory items for purge:', err);
+    }
+  }
 
   let deletedCount = 0;
   for (const cid of sampleCustIds) {
@@ -1044,6 +1469,10 @@ export async function purgeSampleData(
   }
   for (const rid of sampleRemIds) {
     await deleteDoc(doc(db, 'reminders', rid));
+    deletedCount++;
+  }
+  for (const invId of sampleInvIds) {
+    await deleteDoc(doc(db, 'inventory', invId));
     deletedCount++;
   }
 

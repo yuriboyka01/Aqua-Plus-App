@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Wrench, BellRing, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, Wrench, BellRing, Settings, Package } from 'lucide-react';
 import { ActiveTab } from './Sidebar';
 
 interface MobileNavProps {
@@ -8,6 +8,7 @@ interface MobileNavProps {
   onOpenAddCustomer: () => void;
   onOpenRecordService: () => void;
   pendingCount: number;
+  lowStockCount?: number;
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({
@@ -15,6 +16,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   setActiveTab,
   onOpenRecordService,
   pendingCount,
+  lowStockCount = 0,
 }) => {
   return (
     <nav aria-label="Main navigation" className="fixed bottom-0 inset-x-0 z-40 bg-[#0C231F] border-t border-[#1C3E37] px-2 py-2 md:hidden shadow-xl flex items-center justify-around">
@@ -48,6 +50,20 @@ export const MobileNav: React.FC<MobileNavProps> = ({
         title="Record Completed Service Visit"
       >
         <Wrench className="w-5 h-5" />
+      </button>
+
+      <button
+        onClick={() => setActiveTab('inventory')}
+        aria-current={activeTab === 'inventory' ? 'page' : undefined}
+        className={`relative flex flex-col items-center justify-center py-1 px-2 min-w-[55px] min-h-12 rounded-lg transition-colors ${
+          activeTab === 'inventory' ? 'text-[#7EE787] font-semibold' : 'text-[#86AB9F]'
+        }`}
+      >
+        <Package className="w-5 h-5" />
+        {lowStockCount > 0 && (
+          <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-[#F6D285]" />
+        )}
+        <span className="text-xs mt-1 font-medium">Stock</span>
       </button>
 
       <button

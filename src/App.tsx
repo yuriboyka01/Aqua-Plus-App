@@ -21,6 +21,7 @@ const RemindersQueuePage = lazy(() => import('./pages/RemindersQueuePage').then(
 const DailyReportsPage = lazy(() => import('./pages/DailyReportsPage').then((module) => ({ default: module.DailyReportsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const AutomatedTestsPage = lazy(() => import('./pages/AutomatedTestsPage').then((module) => ({ default: module.AutomatedTestsPage })));
+const InventoryPage = lazy(() => import('./pages/InventoryPage').then((module) => ({ default: module.InventoryPage })));
 
 // Types and Services
 import {
@@ -30,6 +31,8 @@ import {
   MessageAttempt,
   AppSettings,
   OwnerReport,
+  InventoryItem,
+  getStockStatus,
 } from './types';
 import {
   subscribeCustomers,
@@ -50,6 +53,11 @@ import {
   saveSettings,
   seedSampleData,
   purgeSampleData,
+  subscribeInventory,
+  addInventoryItem,
+  updateInventoryItem,
+  adjustInventoryQuantity,
+  deleteInventoryItem,
 } from './services/dbService';
 import { testFirestoreConnection } from './lib/firebase';
 import { runDailyBatch } from './services/apiService';
@@ -91,6 +99,7 @@ function AquaPlusApp() {
   const [deliveryStatuses, setDeliveryStatuses] = useState<{ providerMessageId: string; status: 'sent' | 'delivered' | 'read' | 'failed' }[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [ownerReports, setOwnerReports] = useState<OwnerReport[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
 
   // Modals state
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -126,6 +135,7 @@ function AquaPlusApp() {
     const unsubDelivery = subscribeMessageDeliveryStatus(effectiveOwnerId, setDeliveryStatuses);
     const unsubSettings = subscribeSettings(effectiveOwnerId, setSettings);
     const unsubReports = subscribeOwnerReports(effectiveOwnerId, setOwnerReports);
+    const unsubInventory = subscribeInventory(effectiveOwnerId, setInventory);
 
     return () => {
       unsubCustomers();
@@ -135,6 +145,7 @@ function AquaPlusApp() {
       unsubDelivery();
       unsubSettings();
       unsubReports();
+      unsubInventory();
     };
   }, [currentUser, authLoading, isOwner]);
 
@@ -151,7 +162,7 @@ function AquaPlusApp() {
     }
   }, [customers]);
 
-  const hasSampleData = customers.some((c) => c.isSampleData);
+  const hasSampleData = customers.some((c) => c.isSampleData) || inventory.some((i) => i.isSampleData);
 
   // Reminders badges
   const todayStr = getTodayKolkata();
@@ -160,6 +171,9 @@ function AquaPlusApp() {
   ).length;
   const overdueCount = reminders.filter(
     (r) => getDaysUntilDate(r.reminderDate) < 0 && r.status !== 'superseded' && r.status !== 'sent' && r.status !== 'contacted_manually' && r.status !== 'paused'
+  ).length;
+  const inventoryLowStockCount = inventory.filter(
+    (item) => getStockStatus(item) === 'low_stock' || getStockStatus(item) === 'out_of_stock'
   ).length;
 
   // Handlers
@@ -187,9 +201,27 @@ function AquaPlusApp() {
     setIsRecordServiceModalOpen(true);
   };
 
-  const handleSaveServiceRecord = async (recordData: any, customer: Customer) => {
+  const handleSaveServiceRecord = async (
+    recordData: any,
+    customer: Customer,
+    usedParts?: { itemId: string; quantity: number }[]
+  ) => {
     const effectiveOwnerId = BUSINESS_OWNER_ID;
     await recordCompletedService(recordData, effectiveOwnerId, customer);
+    if (usedParts && usedParts.length > 0) {
+      for (const part of usedParts) {
+        try {
+          await adjustInventoryQuantity(
+            part.itemId,
+            -part.quantity,
+            effectiveOwnerId,
+            `Used in service visit for ${customer.fullName}`
+          );
+        } catch (err) {
+          console.warn(`Failed to deduct inventory for ${part.itemId}:`, err);
+        }
+      }
+    }
   };
 
   const handleArchiveToggle = async (customer: Customer) => {
@@ -263,7 +295,7 @@ function AquaPlusApp() {
               AquaPlus Service
             </h1>
             <p className="text-xs text-teal-300 font-medium">
-              Aqua Plus RO Tech • Thirunagar 5th Stop, Madurai
+              Aqua Plus RO Tech â€¢ Thirunagar 5th Stop, Madurai
             </p>
           </div>
 
@@ -440,6 +472,7 @@ function AquaPlusApp() {
         setCollapsed={setSidebarCollapsed}
         dueTodayCount={dueTodayCount}
         overdueCount={overdueCount}
+        inventoryLowStockCount={inventoryLowStockCount}
       />
 
       {/* Main App Layout */}
@@ -462,7 +495,7 @@ function AquaPlusApp() {
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 lg:p-6 max-w-7xl w-full mx-auto">
-          <Suspense fallback={<div className="py-12 text-center text-sm text-[#5C6E67]">Loading workspace…</div>}>
+          <Suspense fallback={<div className="py-12 text-center text-sm text-[#5C6E67]">Loading workspaceâ€¦</div>}>
           {activeTab === 'dashboard' && (
             <DashboardPage
               customers={customers}
@@ -489,6 +522,29 @@ function AquaPlusApp() {
               onRecordServiceForCustomer={(cust) => handleOpenRecordService(cust)}
               onArchiveToggle={handleArchiveToggle}
               initialSearch={searchQuery}
+            />
+          )}
+
+          {activeTab === 'inventory' && (
+            <InventoryPage
+              inventory={inventory}
+              onAddItem={async (data) => {
+                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
+                await addInventoryItem(data, effectiveOwnerId);
+              }}
+              onUpdateItem={async (id, updates) => {
+                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
+                await updateInventoryItem(id, updates, effectiveOwnerId);
+              }}
+              onAdjustQuantity={async (id, delta, reason) => {
+                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
+                await adjustInventoryQuantity(id, delta, effectiveOwnerId, reason);
+              }}
+              onDeleteItem={async (id) => {
+                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
+                await deleteInventoryItem(id, effectiveOwnerId);
+              }}
+              ownerId={currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID}
             />
           )}
 
@@ -571,6 +627,7 @@ function AquaPlusApp() {
         onOpenAddCustomer={handleOpenAddCustomer}
         onOpenRecordService={() => handleOpenRecordService()}
         pendingCount={dueTodayCount + overdueCount}
+        lowStockCount={inventoryLowStockCount}
       />
 
       {/* MODALS */}
@@ -611,6 +668,7 @@ function AquaPlusApp() {
         customers={customers.filter((c) => c.status === 'active')}
         preselectedCustomer={preselectedCustomerForService}
           onSave={handleSaveServiceRecord}
+          inventory={inventory}
         />
       )}
 
@@ -673,7 +731,7 @@ function AquaPlusApp() {
         }}
         onPurgeData={async () => {
           const effectiveOwnerId = BUSINESS_OWNER_ID;
-          return await purgeSampleData(customers, serviceRecords, reminders, effectiveOwnerId);
+          return await purgeSampleData(customers, serviceRecords, reminders, effectiveOwnerId, inventory);
         }}
         />
       )}

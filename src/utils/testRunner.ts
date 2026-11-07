@@ -11,7 +11,9 @@ import {
   findDuplicatePhoneCustomer,
   normalizePhoneNumber,
 } from './businessLogic';
-import { Customer, Reminder, ServiceRecord, MessageAttempt } from '../types';
+import { Customer, Reminder, ServiceRecord, MessageAttempt, getStockStatus } from '../types';
+import { calculateScaledDimensions, estimateBase64Size } from './imageCompressor';
+import { normalizeCategory, parseAndNormalizeVisionResponse } from '../server/geminiVisionAdapter';
 
 export interface TestCaseResult {
   id: string;
@@ -435,6 +437,88 @@ export function runAllBusinessLogicTests(): TestCaseResult[] {
       id: 'test_11_duplicate_phone',
       name: 'Preventing Duplicate Customer Phone Numbers',
       description: 'Detects matching normalized phone',
+      passed: false,
+      error: err.message,
+    });
+  }
+
+  // TEST 12: Evaluating inventory stock status & low-stock alerts
+  try {
+    const outOfStock = getStockStatus({ quantity: 0, lowStockThreshold: 5 });
+    const lowStock = getStockStatus({ quantity: 4, lowStockThreshold: 5 });
+    const inStock = getStockStatus({ quantity: 12, lowStockThreshold: 5 });
+    const passed = outOfStock === 'out_of_stock' && lowStock === 'low_stock' && inStock === 'in_stock';
+    results.push({
+      id: 'test_12_inventory_status',
+      name: 'Evaluating Inventory Stock Levels & Low-Stock Alerts',
+      description: 'Accurately computes in_stock, low_stock, and out_of_stock states against thresholds',
+      passed,
+      expected: 'out_of_stock (0), low_stock (4), in_stock (12)',
+      actual: `${outOfStock}, ${lowStock}, ${inStock}`,
+    });
+  } catch (err: any) {
+    results.push({
+      id: 'test_12_inventory_status',
+      name: 'Evaluating Inventory Stock Levels & Low-Stock Alerts',
+      description: 'Accurately computes stock status',
+      passed: false,
+      error: err.message,
+    });
+  }
+
+  // TEST 13: Image downscaling & aspect ratio calculations
+  try {
+    const scaled = calculateScaledDimensions(4032, 3024, 1600);
+    const small = calculateScaledDimensions(800, 600, 1600);
+    const est = estimateBase64Size('QUJD');
+    const passed = scaled.width === 1600 && scaled.height === 1200 && small.scale === 1 && est === 3;
+    results.push({
+      id: 'test_13_image_scaling',
+      name: 'Client-Side Camera Photo Resizing & Compression Scaling',
+      description: 'Downsamples large 12MP-48MP smartphone photos to 1600px without upscaling small images',
+      passed,
+      expected: '1600x1200 scaled, small scale 1.0, 3 bytes base64',
+      actual: `${scaled.width}x${scaled.height}, small scale ${small.scale}, ${est} bytes`,
+    });
+  } catch (err: any) {
+    results.push({
+      id: 'test_13_image_scaling',
+      name: 'Client-Side Camera Photo Resizing & Compression Scaling',
+      description: 'Downsamples large smartphone photos to 1600px',
+      passed: false,
+      error: err.message,
+    });
+  }
+
+  // TEST 14: AI Vision category synonym & normalization mapping
+  try {
+    const spunCat = normalizeCategory('pre_filter');
+    const roCat = normalizeCategory('romembrane');
+    const pumpCat = normalizeCategory('booster pump 24v');
+    const parsed = parseAndNormalizeVisionResponse({
+      scanType: 'physical_parts',
+      rawSummary: 'Identified parts',
+      items: [{ name: 'Spun Filter', category: 'spun_filter', quantity: 2, confidence: 'high' }],
+    });
+    const passed =
+      spunCat === 'spun_filter' &&
+      roCat === 'ro_membrane' &&
+      pumpCat === 'booster_pump' &&
+      parsed.items.length === 1 &&
+      parsed.items[0].category === 'spun_filter';
+    results.push({
+      id: 'test_14_ai_vision_mapping',
+      name: 'AI Vision Spare Parts Category & Synonym Normalization',
+      description: 'Maps industry aliases (pre_filter, romembrane, pump) to standardized inventory categories',
+      passed,
+      expected: 'spun_filter, ro_membrane, booster_pump',
+      actual: `${spunCat}, ${roCat}, ${pumpCat}`,
+    });
+  } catch (err: any) {
+    results.push({
+      id: 'test_14_ai_vision_mapping',
+      name: 'AI Vision Spare Parts Category & Synonym Normalization',
+      description: 'Maps industry aliases to inventory categories',
       passed: false,
       error: err.message,
     });
