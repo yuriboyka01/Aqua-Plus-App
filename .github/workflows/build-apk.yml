@@ -45,11 +45,11 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Install Node Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run Invariant Regressions Suite
         run: npm test
