@@ -1,0 +1,46 @@
+#!/bin/sh
+remote="$1"
+url="$2"
+
+# Block any push to Aqua-plus (the website repository)
+case "$url" in
+  *Aqua-plus*|*aqua-plus*)
+    case "$url" in
+      *Aqua-Plus-App*|*aqua-plus-app*)
+        # Allowed: This is the app repo
+        ;;
+      *)
+        echo ""
+        echo "================================================================"
+        echo "[CRITICAL SAFETY GUARD] PUSH REJECTED BY PRE-PUSH HOOK!"
+        echo "Target URL: $url"
+        echo "Error: You are attempting to push the mobile app codebase to the"
+        echo "WEBSITE repository (Aqua-plus)!"
+        echo ""
+        echo "The mobile app must ONLY be pushed to:"
+        echo "  https://github.com/yuriboyka01/Aqua-Plus-App.git"
+        echo "================================================================"
+        echo ""
+        exit 1
+        ;;
+    esac
+    ;;
+esac
+
+# Enforce that the target URL must be Aqua-Plus-App
+case "$url" in
+  *Aqua-Plus-App*|*aqua-plus-app*)
+    exit 0
+    ;;
+  *)
+    echo ""
+    echo "================================================================"
+    echo "[CRITICAL SAFETY GUARD] PUSH REJECTED BY PRE-PUSH HOOK!"
+    echo "Target URL: $url"
+    echo "This repository is restricted to push ONLY to:"
+    echo "  https://github.com/yuriboyka01/Aqua-Plus-App.git"
+    echo "================================================================"
+    echo ""
+    exit 1
+    ;;
+esac

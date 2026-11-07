@@ -16,7 +16,8 @@
     "cap:sync": "npm run build && cap sync android",
     "cap:build": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
     "cap:open": "cap open android",
-    "build:apk": "npm run build && cap sync android"
+    "build:apk": "npm run build && cap sync android",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
