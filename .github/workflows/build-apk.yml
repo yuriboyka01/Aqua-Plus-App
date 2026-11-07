@@ -1,0 +1,102 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'android/**'
+      - 'package.json'
+      - 'capacitor.config.ts'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish a GitHub Release with the APK'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Run Invariant Regressions Suite
+        run: npm test
+
+      - name: Build Web Production Bundle
+        run: npm run build
+
+      - name: Sync Capacitor Android Assets
+        run: npx cap sync android
+
+      - name: Assemble Debug APK with Gradle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Stage APK Artifact with Version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+          cp android/app/build/outputs/apk/debug/app-debug.apk "AquaPlus-Service-v${VERSION}.apk"
+          echo "Generated APK: AquaPlus-Service-v${VERSION}.apk"
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AquaPlus-Service-v${{ env.APP_VERSION }}
+          path: AquaPlus-Service-v*.apk
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' || github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: AquaPlus Service v${{ env.APP_VERSION }}
+          draft: false
+          prerelease: false
+          files: AquaPlus-Service-v*.apk
+          body: |
+            ### AquaPlus Service Android App Release (v${{ env.APP_VERSION }})
+            
+            This APK was built automatically from the web application stack via GitHub Actions.
+            
+            #### Direct Download & Installation:
+            1. Download the attached **`AquaPlus-Service-v${{ env.APP_VERSION }}.apk`** directly on your Android phone.
+            2. Tap the file to install (allow "Install unknown apps" in Settings if prompted).
+            3. Open **AquaPlus Service** and sign in with your authorized owner account.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

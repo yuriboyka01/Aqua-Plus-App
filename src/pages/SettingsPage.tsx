@@ -19,6 +19,8 @@ import {
   Globe,
   Sliders,
   FileSpreadsheet,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import { AppSettings, Customer, ServiceRecord } from '../types';
 import { DEFAULT_SERVICE_CATEGORIES } from '../lib/constants';
@@ -587,12 +589,51 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
         </div>
 
-        {/* SECTION 7: Single-Owner Security Account */}
+        {/* SECTION 7: App Version & Mobile Updates */}
+        <div className="bg-[#FAF8F3] border border-[#DDD6C5] rounded-xl p-5 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-[#E8E2D2]">
+            <div className="flex items-center gap-2 text-[#165B50]">
+              <Smartphone className="w-4 h-4" />
+              <h2 className="font-bold text-xs">7. Mobile App Releases & Updates</h2>
+            </div>
+            <span className="font-mono-data text-[11px] bg-[#E8F5E9] text-[#2E7D32] px-2 py-0.5 rounded border border-[#C8E6C9] font-bold">
+              v0.0.6
+            </span>
+          </div>
+
+          <p className="text-xs text-[#5C6E67] leading-relaxed">
+            AquaPlus Service builds and releases Android APK packages automatically via GitHub Actions. You can download the latest APK directly to your phone or inspect release notes.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="https://github.com/yuriboyka01/Aqua-plus/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 bg-[#165B50] hover:bg-[#124B42] text-[#FAF8F3] text-xs font-semibold rounded flex items-center gap-1.5 transition-colors shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download Latest Android APK</span>
+              <ExternalLink className="w-3 h-3 opacity-70 ml-0.5" />
+            </a>
+
+            <a
+              href="/download/app.apk"
+              download="AquaPlus-Service.apk"
+              className="px-3.5 py-2 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#1B2421] text-xs font-semibold rounded border border-[#DDD6C5] flex items-center gap-1.5 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-[#5C6E67]" />
+              <span>Direct Server APK</span>
+            </a>
+          </div>
+        </div>
+
+        {/* SECTION 8: Single-Owner Security Account */}
         <div className="bg-[#0C231F] text-[#FAF8F3] border border-[#1A3D35] rounded-xl p-5 shadow-2xs space-y-3 text-xs">
           <div className="flex items-center gap-2 text-[#7EE787] pb-2 border-b border-[#1C3E37]">
             <ShieldCheck className="w-4 h-4" />
             <h2 className="font-semibold text-xs font-mono-data uppercase tracking-wider">
-              7. Business Account Security
+              8. Business Account Security
             </h2>
           </div>
           <p className="text-[#B4CBC3] leading-relaxed">

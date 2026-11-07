@@ -1,7 +1,7 @@
 {
   "name": "aquaplus-service",
   "private": true,
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -16,7 +16,7 @@
     "cap:sync": "npm run build && cap sync android",
     "cap:build": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
     "cap:open": "cap open android",
-    "ota": "npm run build && npx @capgo/cli bundle upload com.aquaplus.service -c production,dev"
+    "build:apk": "npm run build && cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
       enabled: true,
     },
     CapacitorUpdater: {
-      autoUpdate: true,
+      autoUpdate: false,
       resetWhenUpdate: false,
     },
   },
