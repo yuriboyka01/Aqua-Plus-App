@@ -1,5 +1,14 @@
 import { AppSettings, ServiceCategory } from '../types/index.ts';
 
+// Application Version & Repository Release Metadata
+export const APP_VERSION = '0.0.7';
+export const APP_REPO_OWNER = 'yuriboyka01';
+export const APP_REPO_NAME = 'Aqua-Plus-App';
+export const APP_REPO_URL = `https://github.com/${APP_REPO_OWNER}/${APP_REPO_NAME}`;
+export const APP_RELEASES_URL = `${APP_REPO_URL}/releases`;
+export const APP_LATEST_RELEASE_URL = `${APP_REPO_URL}/releases/latest`;
+export const GITHUB_API_LATEST_RELEASE = `https://api.github.com/repos/${APP_REPO_OWNER}/${APP_REPO_NAME}/releases/latest`;
+
 // Stable tenant key shared by the authorized Aqua Plus business accounts.
 export const BUSINESS_OWNER_ID = 'aquaplus-business';
 

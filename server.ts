@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { createApiMiddleware } from './src/server/apiMiddleware';
 import { isAllowedOrigin } from './src/utils/apiUtils';
@@ -60,7 +61,12 @@ app.use(createApiMiddleware());
 // Direct download route for the newly compiled Android APK
 app.get('/download/app.apk', (_req, res) => {
   const apkPath = path.join(projectRoot, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-  res.download(apkPath, 'AquaPlus-Service.apk');
+  if (fs.existsSync(apkPath)) {
+    res.download(apkPath, 'AquaPlus-Service.apk');
+  } else {
+    // If not present in local build output, redirect to the latest GitHub release APK
+    res.redirect(302, 'https://github.com/yuriboyka01/Aqua-Plus-App/releases/latest');
+  }
 });
 
 app.use(express.static(path.join(projectRoot, 'dist'), {

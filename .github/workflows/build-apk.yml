@@ -15,6 +15,11 @@ on:
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: 'Custom Release Tag (leave empty to use package.json version, e.g. v0.0.7)'
+        required: false
+        type: string
+        default: ''
       create_release:
         description: 'Publish a GitHub Release with the APK'
         required: true
@@ -69,33 +74,44 @@ jobs:
       - name: Stage APK Artifact with Version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
-          cp android/app/build/outputs/apk/debug/app-debug.apk "AquaPlus-Service-v${VERSION}.apk"
-          echo "Generated APK: AquaPlus-Service-v${VERSION}.apk"
+          INPUT_TAG="${{ github.event.inputs.release_tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            CLEAN_VER="${INPUT_TAG#v}"
+            TAG_NAME="v$CLEAN_VER"
+            APP_VERSION="$CLEAN_VER"
+          else
+            TAG_NAME="v$VERSION"
+            APP_VERSION="$VERSION"
+          fi
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_TAG=$TAG_NAME" >> $GITHUB_ENV
+          cp android/app/build/outputs/apk/debug/app-debug.apk "AquaPlus-Service-${TAG_NAME}.apk"
+          echo "Generated APK: AquaPlus-Service-${TAG_NAME}.apk"
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AquaPlus-Service-v${{ env.APP_VERSION }}
-          path: AquaPlus-Service-v*.apk
+          name: AquaPlus-Service-${{ env.RELEASE_TAG }}
+          path: AquaPlus-Service-*.apk
           retention-days: 90
 
       - name: Publish GitHub Release
         if: github.event_name == 'push' || github.event.inputs.create_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.APP_VERSION }}
-          name: AquaPlus Service v${{ env.APP_VERSION }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: AquaPlus Service ${{ env.RELEASE_TAG }}
           draft: false
           prerelease: false
-          files: AquaPlus-Service-v*.apk
+          make_latest: true
+          files: AquaPlus-Service-*.apk
           body: |
-            ### AquaPlus Service Android App Release (v${{ env.APP_VERSION }})
+            ### AquaPlus Service Android App Release (${{ env.RELEASE_TAG }})
             
             This APK was built automatically from the web application stack via GitHub Actions.
             
             #### Direct Download & Installation:
-            1. Download the attached **`AquaPlus-Service-v${{ env.APP_VERSION }}.apk`** directly on your Android phone.
+            1. Download the attached **`AquaPlus-Service-${{ env.RELEASE_TAG }}.apk`** directly on your Android phone.
             2. Tap the file to install (allow "Install unknown apps" in Settings if prompted).
             3. Open **AquaPlus Service** and sign in with your authorized owner account.
         env:

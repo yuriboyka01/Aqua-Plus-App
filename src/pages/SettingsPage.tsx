@@ -23,7 +23,7 @@ import {
   Download,
 } from 'lucide-react';
 import { AppSettings, Customer, ServiceRecord } from '../types';
-import { DEFAULT_SERVICE_CATEGORIES } from '../lib/constants';
+import { DEFAULT_SERVICE_CATEGORIES, APP_VERSION, APP_LATEST_RELEASE_URL, APP_RELEASES_URL } from '../lib/constants';
 import { exportCustomersToCsv, exportServiceRecordsToCsv } from '../utils/csvExport';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -33,6 +33,7 @@ import {
   getApiBaseUrl,
   setApiBaseUrl,
 } from '../services/apiService';
+import { fetchLatestRelease, GitHubReleaseInfo } from '../services/releaseService';
 
 interface SettingsPageProps {
   settings: AppSettings;
@@ -78,6 +79,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const isNativeShell = typeof window !== 'undefined' && window.location.protocol === 'capacitor:';
   const apiEndpointMode = apiBaseUrl ? 'Custom backend URL saved' : isNativeShell ? 'Backend URL required' : 'Same-origin API';
 
+  // GitHub Release inspection state
+  const [releaseInfo, setReleaseInfo] = useState<GitHubReleaseInfo | null>(null);
+  const [checkingRelease, setCheckingRelease] = useState(false);
+  const [releaseCheckError, setReleaseCheckError] = useState<string | null>(null);
+
+  const checkReleaseStatus = async () => {
+    setCheckingRelease(true);
+    setReleaseCheckError(null);
+    try {
+      const info = await fetchLatestRelease();
+      setReleaseInfo(info);
+    } catch (err: any) {
+      setReleaseCheckError(err?.message || 'Unable to check GitHub Releases automatically');
+    } finally {
+      setCheckingRelease(false);
+    }
+  };
+
   useEffect(() => {
     setFormData(settings);
   }, [settings]);
@@ -91,6 +110,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       }
     }
     loadIntegrationStatus();
+    checkReleaseStatus();
   }, []);
 
   const loadIntegrationStatus = async () => {
@@ -431,6 +451,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       setApiBaseUrlSaved(true);
                       setTimeout(() => setApiBaseUrlSaved(false), 2500);
                       loadIntegrationStatus();
+                      checkReleaseStatus();
                     }}
                     className="w-full sm:w-auto px-3.5 py-1.5 bg-[#163830] hover:bg-[#0E2822] text-[#FAF8F3] font-semibold rounded text-xs flex items-center justify-center gap-1.5 transition-colors shrink-0"
                   >
@@ -596,25 +617,112 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <Smartphone className="w-4 h-4" />
               <h2 className="font-bold text-xs">7. Mobile App Releases & Updates</h2>
             </div>
-            <span className="font-mono-data text-[11px] bg-[#E8F5E9] text-[#2E7D32] px-2 py-0.5 rounded border border-[#C8E6C9] font-bold">
-              v0.0.6
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono-data text-[11px] bg-[#E8F5E9] text-[#2E7D32] px-2 py-0.5 rounded border border-[#C8E6C9] font-bold">
+                Installed: v{APP_VERSION}
+              </span>
+              {checkingRelease ? (
+                <span className="font-mono-data text-[11px] bg-[#E0F2FE] text-[#0369A1] px-2 py-0.5 rounded border border-[#BAE6FD] font-semibold flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Checking...
+                </span>
+              ) : releaseInfo?.isUpdateAvailable ? (
+                <span className="font-mono-data text-[11px] bg-[#FEF3C7] text-[#92400E] px-2 py-0.5 rounded border border-[#FDE68A] font-bold">
+                  {releaseInfo.tagName} Available
+                </span>
+              ) : releaseInfo ? (
+                <span className="font-mono-data text-[11px] bg-[#E8F5E9] text-[#2E7D32] px-2 py-0.5 rounded border border-[#C8E6C9] font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Up to Date
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <p className="text-xs text-[#5C6E67] leading-relaxed">
-            AquaPlus Service builds and releases Android APK packages automatically via GitHub Actions. You can download the latest APK directly to your phone or inspect release notes.
+            AquaPlus Service builds and releases Android APK packages automatically via GitHub Actions. You can check for updates, download the latest APK directly to your phone, or inspect release notes.
           </p>
+
+          {releaseInfo && (
+            <div className="bg-[#F4F0E6] rounded-lg p-3.5 border border-[#DDD6C5] space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold text-[#1B2421]">{releaseInfo.name}</span>
+                  {releaseInfo.publishedDateFormatted && (
+                    <span className="text-[#5C6E67] ml-2 text-[11px]">
+                      (Released {releaseInfo.publishedDateFormatted})
+                    </span>
+                  )}
+                </div>
+                {releaseInfo.isUpdateAvailable ? (
+                  <span className="text-[11px] font-bold text-[#C25E00] bg-[#FFEDD5] px-2 py-0.5 rounded border border-[#FED7AA]">
+                    New version available
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-semibold text-[#165B50] bg-[#E6F4F1] px-2 py-0.5 rounded border border-[#B2DFDB]">
+                    Installed version matches latest release
+                  </span>
+                )}
+              </div>
+
+              {releaseInfo.apkFileName && (
+                <div className="text-[11px] text-[#5C6E67] flex items-center gap-2">
+                  <span className="font-mono-data text-[#1B2421] font-medium">{releaseInfo.apkFileName}</span>
+                  <span>•</span>
+                  <span>{releaseInfo.apkSizeFormatted}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {releaseCheckError && (
+            <div className="bg-[#FEF2F2] rounded-lg p-3 border border-[#FCA5A5] text-xs text-[#991B1B] flex items-center justify-between">
+              <span>{releaseCheckError}</span>
+              <button
+                type="button"
+                onClick={checkReleaseStatus}
+                disabled={checkingRelease}
+                className="px-2.5 py-1 bg-[#FAF8F3] hover:bg-[#FEE2E2] text-[#991B1B] font-semibold rounded border border-[#FCA5A5] text-[11px] flex items-center gap-1 transition-colors"
+              >
+                <RefreshCw className={`w-3 h-3 ${checkingRelease ? 'animate-spin' : ''}`} />
+                <span>Retry</span>
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <a
-              href="https://github.com/yuriboyka01/Aqua-plus/releases/latest"
+              href={releaseInfo?.apkDownloadUrl || APP_LATEST_RELEASE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="px-3.5 py-2 bg-[#165B50] hover:bg-[#124B42] text-[#FAF8F3] text-xs font-semibold rounded flex items-center gap-1.5 transition-colors shadow-2xs"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Download Latest Android APK</span>
+              <span>
+                {releaseInfo?.isUpdateAvailable
+                  ? `Download Update (${releaseInfo.tagName})`
+                  : 'Download Latest Android APK'}
+              </span>
               <ExternalLink className="w-3 h-3 opacity-70 ml-0.5" />
+            </a>
+
+            <button
+              type="button"
+              onClick={checkReleaseStatus}
+              disabled={checkingRelease}
+              className="px-3.5 py-2 bg-[#FAF8F3] hover:bg-[#EDE7DA] text-[#1B2421] text-xs font-semibold rounded border border-[#DDD6C5] flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-[#5C6E67] ${checkingRelease ? 'animate-spin' : ''}`} />
+              <span>{checkingRelease ? 'Checking...' : 'Check for Updates'}</span>
+            </button>
+
+            <a
+              href={APP_RELEASES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#1B2421] text-xs font-semibold rounded border border-[#DDD6C5] flex items-center gap-1.5 transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-[#5C6E67]" />
+              <span>View Releases on GitHub</span>
             </a>
 
             <a

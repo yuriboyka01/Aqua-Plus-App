@@ -36,6 +36,11 @@ import {
   InventoryScanError,
   isQuotaExceededError,
 } from '../src/services/apiService.ts';
+import {
+  normalizeVersion,
+  isVersionNewer,
+  formatBytes,
+} from '../src/services/releaseService.ts';
 
 const today = getTodayKolkata();
 function customer(overrides: Record<string, unknown> = {}): any {
@@ -660,4 +665,25 @@ test('scanInventoryImage validates input parameters and handles error classifica
   assert.equal(isQuotaExceededError(quotaErr), true);
   assert.equal(isQuotaExceededError(new Error('Resource exhausted 429 quota')), true);
   assert.equal(isQuotaExceededError(new Error('Regular network failure')), false);
+});
+
+test('releaseService accurately parses versions, detects upgrades, and formats file sizes', () => {
+  // normalizeVersion
+  assert.equal(normalizeVersion('v0.0.7'), '0.0.7');
+  assert.equal(normalizeVersion('V1.2.3'), '1.2.3');
+  assert.equal(normalizeVersion('  0.0.6  '), '0.0.6');
+
+  // isVersionNewer
+  assert.equal(isVersionNewer('0.0.7', '0.0.6'), true);
+  assert.equal(isVersionNewer('v0.0.8', '0.0.7'), true);
+  assert.equal(isVersionNewer('0.1.0', '0.0.9'), true);
+  assert.equal(isVersionNewer('1.0.0', '0.9.9'), true);
+  assert.equal(isVersionNewer('0.0.6', '0.0.6'), false);
+  assert.equal(isVersionNewer('0.0.5', '0.0.6'), false);
+  assert.equal(isVersionNewer('', '0.0.6'), false);
+
+  // formatBytes
+  assert.equal(formatBytes(6544066), '6.2 MB');
+  assert.equal(formatBytes(0), 'Unknown size');
+  assert.equal(formatBytes(null), 'Unknown size');
 });
