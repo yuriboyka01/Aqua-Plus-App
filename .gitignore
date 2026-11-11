@@ -19,3 +19,6 @@ android/*.iml
 # Capacitor & Capgo
 .capgo/
 
+# Documents & temporary assets
+*.pdf
+

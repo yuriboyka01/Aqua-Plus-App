@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   Wrench,
@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Droplets,
   AlertCircle,
+  Search,
 } from 'lucide-react';
 import { Customer, ServiceCategory, PaymentStatus, ServiceRecord, InventoryItem } from '../types';
 import { DEFAULT_SERVICE_CATEGORIES } from '../lib/constants';
@@ -60,6 +61,29 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
   const [manualOverrideDate, setManualOverrideDate] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [usedParts, setUsedParts] = useState<{ itemId: string; quantity: number }[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch.trim()) return customers;
+    const q = customerSearch.toLowerCase().trim();
+    return customers.filter(
+      (c) =>
+        c.fullName.toLowerCase().includes(q) ||
+        c.primaryPhone.includes(q) ||
+        c.customerId.toLowerCase().includes(q) ||
+        (c.locality || '').toLowerCase().includes(q)
+    );
+  }, [customers, customerSearch]);
+
+  const tdsReductionPercent = useMemo(() => {
+    const inVal = parseFloat(inletTds);
+    const outVal = parseFloat(outputTds);
+    if (!isNaN(inVal) && !isNaN(outVal) && inVal > 0 && inVal >= outVal) {
+      return Math.round(((inVal - outVal) / inVal) * 100);
+    }
+    return null;
+  }, [inletTds, outputTds]);
 
   const formSteps = [
     { short: 'Visit', full: 'Customer and visit details' },
@@ -151,12 +175,13 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
     if (!activeCustomer) {
-      alert('Please select a customer for this service visit.');
+      setValidationError('Please select a customer for this service visit.');
       return;
     }
     if (!workPerformed.trim()) {
-      alert('Please describe the work conducted during this service visit.');
+      setValidationError('Please describe the work conducted during this service visit.');
       return;
     }
 
@@ -194,7 +219,7 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
       setSavedRecord({ customerName: activeCustomer.fullName, reminderDate: finalNextReminderDate });
     } catch (err: any) {
       console.error(err);
-      alert('Failed to save service record. Please check details and retry.');
+      setValidationError(err?.message || 'Failed to save service record. Please check details and retry.');
     } finally {
       setSubmitting(false);
     }
@@ -277,6 +302,23 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
             </ol>
             <p className="sr-only" aria-live="polite">Step {activeStep + 1} of {formSteps.length}: {formSteps[activeStep].full}</p>
           </nav>
+
+          {validationError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="font-semibold">{validationError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setValidationError(null)}
+                className="text-[11px] font-bold text-rose-800 hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* STEP 1: Customer & Visit Date */}
           <div id="service-step-1" data-service-step="1" className="scroll-mt-20 space-y-3 bg-[#F4F0E6] p-4 rounded-xl border border-[#E5DEC9]">
             <div className="flex items-baseline justify-between border-b border-[#DDD6C5] pb-1.5">
@@ -299,18 +341,47 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
                     </span>
                   </div>
                 ) : (
-                  <select
-                    value={selectedCustomerId}
-                    onChange={(e) => setSelectedCustomerId(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FAF8F3] border border-[#DDD6C5] rounded-md font-medium text-[#1B2421] focus:border-[#163830]"
-                    required
-                  >
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.fullName} ({c.customerId}) — {c.locality} [{c.primaryPhone}]
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-[#7A8C84] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={customerSearch}
+                        onChange={(e) => {
+                          setCustomerSearch(e.target.value);
+                          const q = e.target.value.toLowerCase().trim();
+                          if (q) {
+                            const firstMatch = customers.find(
+                              (c) =>
+                                c.fullName.toLowerCase().includes(q) ||
+                                c.primaryPhone.includes(q) ||
+                                c.customerId.toLowerCase().includes(q) ||
+                                (c.locality || '').toLowerCase().includes(q)
+                            );
+                            if (firstMatch) setSelectedCustomerId(firstMatch.id);
+                          }
+                        }}
+                        placeholder="Filter by name, phone, or locality..."
+                        className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-[#FAF8F3] border border-[#DDD6C5] rounded-md text-[#1B2421]"
+                      />
+                    </div>
+                    <select
+                      value={selectedCustomerId}
+                      onChange={(e) => setSelectedCustomerId(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#FAF8F3] border border-[#DDD6C5] rounded-md font-medium text-[#1B2421] focus:border-[#163830] text-xs"
+                      required
+                    >
+                      {filteredCustomers.length === 0 ? (
+                        <option value="" disabled>No matching customers found</option>
+                      ) : (
+                        filteredCustomers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.fullName} ({c.customerId}) — {c.locality} [{c.primaryPhone}]
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
                 )}
               </div>
 
@@ -595,9 +666,22 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
 
           {/* STEP 5: Technical Quality Readings (Optional) */}
           <div id="service-step-5" data-service-step="5" className="scroll-mt-20 space-y-3 bg-[#F4F0E6] p-4 rounded-xl border border-[#E5DEC9]">
-            <span className="font-editorial font-bold text-sm text-[#1B2421] block border-b border-[#DDD6C5] pb-1.5">
-              5. Water Quality & Technical Readings (Optional)
-            </span>
+            <div className="flex items-center justify-between border-b border-[#DDD6C5] pb-1.5">
+              <span className="font-editorial font-bold text-sm text-[#1B2421]">
+                5. Water Quality & Technical Readings (Optional)
+              </span>
+              {tdsReductionPercent !== null && (
+                <span
+                  className={`px-2 py-0.5 rounded text-[11px] font-mono-data font-bold ${
+                    tdsReductionPercent >= 85
+                      ? 'bg-[#EBF7F2] text-[#165B50] border border-[#C6EAD8]'
+                      : 'bg-amber-50 text-[#B45309] border border-amber-200'
+                  }`}
+                >
+                  {tdsReductionPercent}% TDS Rejection
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div>

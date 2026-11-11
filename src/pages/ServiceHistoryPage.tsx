@@ -197,7 +197,7 @@ export const ServiceHistoryPage: React.FC<ServiceHistoryPageProps> = ({
             <p>Adjust your search filters or record completed maintenance visits to populate the logbook.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#E5DEC9] bg-[#F4F0E6] text-[11px] font-mono-data text-[#5C6E67] uppercase tracking-wider">
@@ -316,6 +316,63 @@ export const ServiceHistoryPage: React.FC<ServiceHistoryPageProps> = ({
         )}
       </div>
 
+      {/* Mobile Service Record Cards (md:hidden) */}
+      {filteredRecords.length > 0 && (
+        <div className="md:hidden space-y-3">
+          {filteredRecords.map((rec) => {
+            const cust = customerMap.get(rec.customerId);
+            return (
+              <div
+                key={rec.id}
+                className="bg-[#FAF8F3] border border-[#E5DEC9] rounded-xl p-4 shadow-2xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div onClick={() => cust && onOpenCustomerDetail(cust)} className="cursor-pointer">
+                    <span className="font-mono-data text-[10px] text-[#5C6E67] bg-[#F4F0E6] px-1.5 py-0.5 rounded border border-[#E5DEC9]">
+                      {formatDisplayDate(rec.serviceDate)}
+                    </span>
+                    <h3 className="font-bold text-sm text-[#1B2421] mt-1">{rec.customerName}</h3>
+                    <p className="text-[11px] text-[#5C6E67]">
+                      {rec.customerPhone} {cust?.locality ? `· ${cust.locality}` : ''}
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono-data font-bold shrink-0 ${
+                      rec.paymentStatus === 'Paid'
+                        ? 'bg-[#EBF7F2] text-[#165B50] border border-[#C6EAD8]'
+                        : rec.paymentStatus === 'Pending'
+                          ? 'bg-amber-50 text-[#B45309] border border-amber-200'
+                          : 'bg-rose-50 text-[#8B1E1E] border border-rose-200'
+                    }`}
+                  >
+                    ₹{rec.totalAmount} · {rec.paymentStatus}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-[#5C6E67] pt-2 border-t border-[#F0EBE0] space-y-1">
+                  <p><strong className="text-[#1B2421]">{rec.serviceCategory}</strong>: {rec.workPerformed}</p>
+                  {rec.filtersReplaced && (
+                    <p className="text-[10px] text-[#165B50]">Parts: {rec.filtersReplaced}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-[#5C6E67] font-mono-data">
+                    Next Due: {formatDisplayDate(rec.nextReminderDate)}
+                  </span>
+                  <button
+                    onClick={() => setSelectedRecord(rec)}
+                    className="py-1.5 px-3 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#1B2421] font-semibold rounded-lg text-xs border border-[#DDD6C5]"
+                  >
+                    Inspection Slip
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Certified Inspection Slip Modal */}
       {selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0C231F]/65 backdrop-blur-xs overflow-y-auto">
@@ -421,6 +478,31 @@ export const ServiceHistoryPage: React.FC<ServiceHistoryPageProps> = ({
                   Next Reminder: <strong className="text-[#1B2421]">{formatDisplayDate(selectedRecord.nextReminderDate)}</strong>
                   {selectedRecord.isDateOverridden && ' (Overridden)'}
                 </span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const receiptText = [
+                      `*Aqua Plus RO Tech • Service Receipt*`,
+                      `Customer: ${selectedRecord.customerName}`,
+                      `Date: ${formatDisplayDate(selectedRecord.serviceDate)}`,
+                      `Category: ${selectedRecord.serviceCategory}`,
+                      `Work: ${selectedRecord.workPerformed}`,
+                      selectedRecord.filtersReplaced ? `Parts: ${selectedRecord.filtersReplaced}` : '',
+                      selectedRecord.technicianNotes ? `Readings: ${selectedRecord.technicianNotes}` : '',
+                      `Total: ₹${selectedRecord.totalAmount} (${selectedRecord.paymentStatus})`,
+                      `Next Due: ${formatDisplayDate(selectedRecord.nextReminderDate)}`,
+                    ]
+                      .filter(Boolean)
+                      .join('\n');
+                    navigator.clipboard?.writeText(receiptText);
+                  }}
+                  className="px-3.5 py-2 bg-[#163830] hover:bg-[#0E2822] text-[#FAF8F3] font-bold rounded-lg text-xs transition-colors"
+                >
+                  Copy WhatsApp Receipt
+                </button>
               </div>
             </div>
           </div>

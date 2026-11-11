@@ -215,7 +215,7 @@ export const RemindersQueuePage: React.FC<RemindersQueuePageProps> = ({
             <p>Everything is currently accounted for and up to date.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#E5DEC9] bg-[#F4F0E6] text-[11px] font-mono-data text-[#5C6E67] uppercase tracking-wider">
@@ -320,6 +320,14 @@ export const RemindersQueuePage: React.FC<RemindersQueuePageProps> = ({
                       <td className="py-3.5 px-4 text-right">
                         {rem.status !== 'superseded' && (
                         <div className="flex items-center justify-end gap-1.5">
+                          <a
+                            href={`tel:${rem.customerPhone}`}
+                            className="p-1.5 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#165B50] rounded border border-[#DDD6C5] transition-colors"
+                            title={`Call ${rem.customerPhone}`}
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+
                           {cust && (
                             <button
                               onClick={() => onOpenWhatsAppPreview(rem, cust)}
@@ -348,6 +356,78 @@ export const RemindersQueuePage: React.FC<RemindersQueuePageProps> = ({
           </div>
         )}
       </div>
+
+      {/* Mobile Reminder Cards (md:hidden) */}
+      {displayedReminders.length > 0 && (
+        <div className="md:hidden space-y-3">
+          {displayedReminders.map((rem) => {
+            const cust = customerMap.get(rem.customerId);
+            const daysUntil = getDaysUntilDate(rem.reminderDate);
+            const isOverdue = daysUntil < 0;
+
+            return (
+              <div
+                key={rem.id}
+                className="bg-[#FAF8F3] border border-[#E5DEC9] rounded-xl p-4 shadow-2xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div onClick={() => cust && onOpenCustomerDetail(cust)} className="cursor-pointer">
+                    <h3 className="font-bold text-sm text-[#1B2421]">{rem.customerName}</h3>
+                    <p className="text-[11px] text-[#5C6E67]">
+                      {rem.customerLocality || 'Madurai'} · <span className="font-mono-data">{rem.customerPhone}</span>
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono-data font-bold shrink-0 ${
+                      isOverdue
+                        ? 'bg-rose-50 text-[#8B1E1E] border border-rose-200'
+                        : daysUntil === 0
+                          ? 'bg-amber-50 text-[#B45309] border border-amber-200'
+                          : 'bg-[#EBF7F2] text-[#165B50] border border-[#C6EAD8]'
+                    }`}
+                  >
+                    {isOverdue ? `${Math.abs(daysUntil)}d Overdue` : daysUntil === 0 ? 'Due Today' : `In ${daysUntil}d`}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-[#5C6E67] pt-2 border-t border-[#F0EBE0] font-mono-data">
+                  <span>Last: {formatDisplayDate(rem.lastServiceDate)}</span>
+                  <span>Due: <strong className="text-[#1B2421]">{formatDisplayDate(rem.reminderDate)}</strong></span>
+                </div>
+
+                {rem.status !== 'superseded' && (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <a
+                      href={`tel:${rem.customerPhone}`}
+                      className="py-2 px-2.5 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#1B2421] rounded-lg border border-[#DDD6C5] text-xs font-semibold flex items-center justify-center gap-1.5"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-[#165B50]" />
+                      <span>Call</span>
+                    </a>
+
+                    {cust && (
+                      <button
+                        onClick={() => onOpenWhatsAppPreview(rem, cust)}
+                        className="py-2 px-2.5 bg-[#174238] hover:bg-[#0E2822] text-[#FAF8F3] rounded-lg text-xs font-bold flex items-center justify-center gap-1.5"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-[#7EE787]" />
+                        <span>WhatsApp</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => onOpenReminderAction(rem)}
+                      className="py-2 px-2.5 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#2D3733] rounded-lg border border-[#DDD6C5] text-xs font-semibold flex items-center justify-center"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

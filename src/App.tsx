@@ -116,6 +116,17 @@ function AquaPlusApp() {
   const [selectedReportForView, setSelectedReportForView] = useState<OwnerReport | null>(null);
   const [isSeedModalOpen, setIsSeedModalOpen] = useState(false);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [toast, setToast] = useState<{ title: string; message: string; tone: 'success' | 'warning' | 'error' } | null>(null);
+
+  const showToast = (title: string, message: string, tone: 'success' | 'warning' | 'error' = 'success') => {
+    setToast({ title, message, tone });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 6500);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   // Test Firestore Connection on boot
   useEffect(() => {
@@ -243,19 +254,28 @@ function AquaPlusApp() {
     setBatchRunning(true);
     try {
       const batchResult = await runDailyBatch();
-      const message = batchResult.status === 'already_completed'
-        ? `Today's batch was already completed.\nReport Date: ${batchResult.reportDate}`
-        : batchResult.status === 'reconciliation_required' || batchResult.status === 'partial_failure'
-          ? `Batch requires manual reconciliation. ${batchResult.persistenceFailures || 0} dispatch result(s) could not be saved; ${batchResult.unknownOutcomes || 0} provider outcome(s) are unknown. Ambiguous messages will not be resent automatically.\nReport Date: ${batchResult.reportDate}`
-        : batchResult.status === 'not_configured'
-          ? 'WhatsApp is not configured on the server. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID, then run the batch again.'
-        : batchResult.status === 'disabled'
-          ? 'Scheduled processing is disabled in settings.'
-          : `Daily batch completed.\n\nEligible Reminders: ${batchResult.eligibleCount}\nMessages accepted by provider: ${batchResult.messagesSent}\nMessages Failed: ${batchResult.messagesFailed}\nSkipped: ${batchResult.skippedCount}\nEmail: ${batchResult.emailDeliveryStatus || 'not_configured'}\nReport Date: ${batchResult.reportDate}`;
-      alert(message);
+      if (batchResult.status === 'already_completed') {
+        showToast('Morning Batch Current', `Today's batch (${batchResult.reportDate}) was already completed.`, 'success');
+      } else if (batchResult.status === 'reconciliation_required' || batchResult.status === 'partial_failure') {
+        showToast(
+          'Reconciliation Required',
+          `${batchResult.persistenceFailures || 0} dispatch result(s) unsaved; ${batchResult.unknownOutcomes || 0} outcome(s) unknown (${batchResult.reportDate}).`,
+          'warning'
+        );
+      } else if (batchResult.status === 'not_configured') {
+        showToast('WhatsApp Not Configured', 'Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID on the server, then retry.', 'warning');
+      } else if (batchResult.status === 'disabled') {
+        showToast('Scheduler Paused', 'Scheduled processing is currently disabled in Settings.', 'warning');
+      } else {
+        showToast(
+          `Morning Batch Completed (${batchResult.reportDate})`,
+          `Eligible: ${batchResult.eligibleCount} · Sent: ${batchResult.messagesSent} · Failed: ${batchResult.messagesFailed} · Skipped: ${batchResult.skippedCount}`,
+          'success'
+        );
+      }
     } catch (err: any) {
       console.error(err);
-      alert(`Batch processing error: ${err.message}`);
+      showToast('Batch Processing Error', err.message || 'Could not complete daily batch run.', 'error');
     } finally {
       setBatchRunning(false);
     }
@@ -495,7 +515,32 @@ function AquaPlusApp() {
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 lg:p-6 max-w-7xl w-full mx-auto">
-          <Suspense fallback={<div className="py-12 text-center text-sm text-[#5C6E67]">Loading workspaceâ€¦</div>}>
+          {toast && (
+            <div
+              role="status"
+              aria-live="polite"
+              className={`mb-4 p-3.5 rounded-xl border shadow-sm flex items-start justify-between gap-3 text-xs transition-all ${
+                toast.tone === 'error'
+                  ? 'bg-rose-50 border-rose-200 text-rose-900'
+                  : toast.tone === 'warning'
+                    ? 'bg-amber-50 border-amber-200 text-amber-900'
+                    : 'bg-[#EBF7F2] border-[#C6EAD8] text-[#163830]'
+              }`}
+            >
+              <div className="space-y-0.5">
+                <p className="font-bold">{toast.title}</p>
+                <p className="font-mono-data text-[11px] opacity-90">{toast.message}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setToast(null)}
+                className="text-[11px] font-bold px-2 py-0.5 rounded hover:bg-black/5 shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          <Suspense fallback={<div className="py-12 text-center text-sm text-[#5C6E67]">Loading workspace...</div>}>
           {activeTab === 'dashboard' && (
             <DashboardPage
               customers={customers}
