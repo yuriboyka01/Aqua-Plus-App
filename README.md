@@ -2,7 +2,7 @@
 
 **AquaPlus Service OS** is the internal service-management and automated customer reminder platform built specifically for **Aqua Plus RO Tech** in **Madurai, Tamil Nadu, India**.
 
-* **Business Address:** Thirunagar 5th Stop, Madurai-625006
+* **Business Address:** Thirunagar 3rd Stop, near BATA showroom, Madurai-625006
 * **Primary Business Phone:** +91 70103 29920
 * **Secondary Business Phone:** +91 63857 86516
 * **Business Email:** aquaplusrosales@gmail.com

@@ -315,7 +315,7 @@ function AquaPlusApp() {
               AquaPlus Service
             </h1>
             <p className="text-xs text-teal-300 font-medium">
-              Aqua Plus RO Tech â€¢ Thirunagar 5th Stop, Madurai
+              Aqua Plus RO Tech • Thirunagar 3rd Stop, near BATA showroom, Madurai
             </p>
           </div>
 
