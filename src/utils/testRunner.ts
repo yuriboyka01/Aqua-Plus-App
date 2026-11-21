@@ -13,7 +13,7 @@ import {
 } from './businessLogic';
 import { Customer, Reminder, ServiceRecord, MessageAttempt, getStockStatus } from '../types';
 import { calculateScaledDimensions, estimateBase64Size } from './imageCompressor';
-import { normalizeCategory, parseAndNormalizeVisionResponse } from '../server/geminiVisionAdapter';
+import { normalizeCategory, parseAndNormalizeVisionResponse } from './visionUtils';
 
 export interface TestCaseResult {
   id: string;

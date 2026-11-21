@@ -6,6 +6,18 @@
     background-color: #FAF8F3;
     color: #1B2421;
     -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    &:focus-visible {
+      outline: 2px solid #163830;
+      outline-offset: 2px;
+    }
   }
 }
 
@@ -20,6 +32,25 @@
 .font-mono-data {
   font-family: 'JetBrains Mono', monospace;
   font-variant-numeric: tabular-nums;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.22s ease-out both;
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 /* Custom subtle scrollbars for tables without breaking desktop horizontal scroll */

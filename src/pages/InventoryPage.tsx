@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Package,
   Plus,
@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   ChevronRight,
   Minus,
+  Download,
 } from 'lucide-react';
 import {
   InventoryItem,
@@ -31,6 +32,7 @@ import {
 } from '../types';
 import { InventoryItemModal } from '../components/inventory/InventoryItemModal';
 import { InventoryScanModal } from '../components/inventory/InventoryScanModal';
+import { exportInventoryToCsv } from '../utils/csvExport';
 
 interface InventoryPageProps {
   inventory: InventoryItem[];
@@ -39,6 +41,7 @@ interface InventoryPageProps {
   onAdjustQuantity: (id: string, delta: number, reason?: string) => Promise<void>;
   onDeleteItem: (id: string) => Promise<void>;
   ownerId: string;
+  initialSearch?: string;
 }
 
 export const InventoryPage: React.FC<InventoryPageProps> = ({
@@ -48,8 +51,14 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
   onAdjustQuantity,
   onDeleteItem,
   ownerId,
+  initialSearch = '',
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [sortBy, setSortBy] = useState<'name' | 'stock_asc' | 'value_desc'>('name');
+
+  useEffect(() => {
+    setSearchTerm(initialSearch);
+  }, [initialSearch]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
@@ -93,9 +102,9 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
     };
   }, [inventory]);
 
-  // Filter items
+  // Filter and sort items
   const filteredItems = useMemo(() => {
-    return inventory.filter((item) => {
+    const matched = inventory.filter((item) => {
       // Search term
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase().trim();
@@ -125,7 +134,12 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
       return true;
     });
-  }, [inventory, searchTerm, selectedCategory, selectedStatus]);
+    return [...matched].sort((a, b) => {
+      if (sortBy === 'stock_asc') return a.quantity - b.quantity;
+      if (sortBy === 'value_desc') return b.quantity * (b.unitCost || 0) - a.quantity * (a.unitCost || 0);
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [inventory, searchTerm, selectedCategory, selectedStatus, sortBy]);
 
   const handleOpenAddModal = () => {
     setItemToEdit(null);
@@ -188,7 +202,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               Spare Parts & Storage
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-[#1F2421] tracking-tight flex items-center gap-2">
+          <h1 className="font-editorial text-2xl font-bold text-[#1B2421] tracking-tight flex items-center gap-2">
             <Package className="w-6 h-6 text-[#0C231F]" />
             <span>Inventory Management</span>
           </h1>
@@ -198,7 +212,17 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => exportInventoryToCsv(inventory)}
+            disabled={inventory.length === 0}
+            className="px-3 py-2 bg-white hover:bg-[#FAF8F3] disabled:opacity-40 text-[#1F2421] text-xs font-semibold rounded-lg border border-[#DDD6C5] flex items-center gap-1.5 transition-colors"
+            title="Export inventory to CSV"
+          >
+            <Download className="w-3.5 h-3.5 text-[#5C6E67]" />
+            <span className="hidden sm:inline">CSV</span>
+          </button>
           <button
             type="button"
             onClick={() => setIsScanModalOpen(true)}
@@ -214,7 +238,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
             className="px-4 py-2 bg-[#0C231F] hover:bg-[#163830] text-[#FAF8F3] text-xs font-bold rounded-lg shadow-sm flex items-center gap-2 transition-colors"
           >
             <Plus className="w-4 h-4 text-[#7EE787]" />
-            <span>+ Add Part</span>
+            <span>Add Part</span>
           </button>
         </div>
       </div>
@@ -243,7 +267,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
             <span className="text-[11px] font-semibold">Total SKUs</span>
             <Boxes className="w-4 h-4 text-[#0C231F]" />
           </div>
-          <div className="text-xl font-bold font-mono text-[#1F2421]">{metrics.totalSkus}</div>
+          <div className="text-xl font-bold font-mono-data text-[#1F2421]">{metrics.totalSkus}</div>
           <div className="text-[10px] text-[#8B8D8C]">Catalog part types</div>
         </div>
 
@@ -253,7 +277,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
             <span className="text-[11px] font-semibold">Units in Stock</span>
             <Package className="w-4 h-4 text-[#0C231F]" />
           </div>
-          <div className="text-xl font-bold font-mono text-[#1F2421]">{metrics.totalUnits}</div>
+          <div className="text-xl font-bold font-mono-data text-[#1F2421]">{metrics.totalUnits}</div>
           <div className="text-[10px] text-[#8B8D8C]">Available in store</div>
         </div>
 
@@ -263,35 +287,51 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
             <span className="text-[11px] font-semibold">Inventory Value</span>
             <IndianRupee className="w-4 h-4 text-[#0C231F]" />
           </div>
-          <div className="text-xl font-bold font-mono text-[#1F2421]">
+          <div className="text-xl font-bold font-mono-data text-[#1F2421]">
             ₹{metrics.totalProcurementValue.toLocaleString('en-IN')}
           </div>
           <div className="text-[10px] text-[#8B8D8C]">Procurement cost</div>
         </div>
 
-        {/* Low Stock Warning */}
-        <div className={`p-3.5 rounded-xl border shadow-xs ${
-          metrics.lowStockCount > 0 ? 'bg-[#FFF7ED] border-[#FDBA74]' : 'bg-white border-[#DDD6C5]'
-        }`}>
+        {/* Low Stock Warning (Clickable Filter) */}
+        <button
+          type="button"
+          onClick={() => setSelectedStatus((prev) => (prev === 'low_stock' ? 'all' : 'low_stock'))}
+          className={`p-3.5 rounded-xl border shadow-xs text-left transition-all ${
+            selectedStatus === 'low_stock'
+              ? 'bg-[#FFF7ED] border-[#C25E00] ring-2 ring-[#C25E00]/25'
+              : metrics.lowStockCount > 0
+                ? 'bg-[#FFF7ED] border-[#FDBA74] hover:border-[#C25E00]'
+                : 'bg-white border-[#DDD6C5] hover:border-[#C5BDAA]'
+          }`}
+        >
           <div className="flex items-center justify-between text-[#C25E00] mb-1">
             <span className="text-[11px] font-semibold">Low Stock</span>
             <AlertTriangle className="w-4 h-4 text-[#C25E00]" />
           </div>
-          <div className="text-xl font-bold font-mono text-[#C25E00]">{metrics.lowStockCount}</div>
-          <div className="text-[10px] text-[#8B8D8C]">Below reorder level</div>
-        </div>
+          <div className="text-xl font-bold font-mono-data text-[#C25E00]">{metrics.lowStockCount}</div>
+          <div className="text-[10px] text-[#8B8D8C]">Click to filter</div>
+        </button>
 
-        {/* Out of Stock Warning */}
-        <div className={`p-3.5 rounded-xl border shadow-xs col-span-2 lg:col-span-1 ${
-          metrics.outOfStockCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-[#DDD6C5]'
-        }`}>
+        {/* Out of Stock Warning (Clickable Filter) */}
+        <button
+          type="button"
+          onClick={() => setSelectedStatus((prev) => (prev === 'out_of_stock' ? 'all' : 'out_of_stock'))}
+          className={`p-3.5 rounded-xl border shadow-xs col-span-2 lg:col-span-1 text-left transition-all ${
+            selectedStatus === 'out_of_stock'
+              ? 'bg-red-50 border-red-500 ring-2 ring-red-500/20'
+              : metrics.outOfStockCount > 0
+                ? 'bg-red-50 border-red-200 hover:border-red-400'
+                : 'bg-white border-[#DDD6C5] hover:border-[#C5BDAA]'
+          }`}
+        >
           <div className="flex items-center justify-between text-red-600 mb-1">
             <span className="text-[11px] font-semibold">Out of Stock</span>
             <AlertCircle className="w-4 h-4 text-red-500" />
           </div>
-          <div className="text-xl font-bold font-mono text-red-600">{metrics.outOfStockCount}</div>
-          <div className="text-[10px] text-[#8B8D8C]">Immediate restock needed</div>
-        </div>
+          <div className="text-xl font-bold font-mono-data text-red-600">{metrics.outOfStockCount}</div>
+          <div className="text-[10px] text-[#8B8D8C]">Click to filter</div>
+        </button>
       </div>
 
       {/* Filter and Search Bar */}
@@ -338,6 +378,20 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <option value="out_of_stock">Out of Stock</option>
             </select>
           </div>
+
+          {/* Sort Dropdown */}
+          <div className="w-full sm:w-44 shrink-0">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'stock_asc' | 'value_desc')}
+              aria-label="Sort inventory"
+              className="w-full px-3 py-2 text-xs bg-[#FAF8F3] border border-[#DDD6C5] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0C231F] text-[#1F2421]"
+            >
+              <option value="name">Sort: Name (A-Z)</option>
+              <option value="stock_asc">Sort: Lowest Stock</option>
+              <option value="value_desc">Sort: Highest Value</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -359,7 +413,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               onClick={handleOpenAddModal}
               className="px-4 py-2 bg-[#0C231F] text-[#FAF8F3] text-xs font-bold rounded-lg shadow-sm"
             >
-              + Add Part
+              Add Part
             </button>
             <button
               type="button"
@@ -425,7 +479,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="font-mono font-bold text-xs w-8 text-center text-[#1F2421]">
+                          <span className="font-mono-data font-bold text-xs w-8 text-center text-[#1F2421]">
                             {item.quantity}
                           </span>
                           <button
@@ -516,9 +570,17 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="font-bold text-sm text-[#1F2421]">{item.name}</div>
-                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-[#EAE6DC] text-[#0C231F] mt-1">
-                        {INVENTORY_CATEGORY_LABELS[item.category] || item.category}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-[#EAE6DC] text-[#0C231F]">
+                          {INVENTORY_CATEGORY_LABELS[item.category] || item.category}
+                        </span>
+                        {item.storageLocation && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-[#5C6E67]">
+                            <MapPin className="w-3 h-3 text-[#8B8D8C]" />
+                            {item.storageLocation}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Status Badge */}
@@ -561,7 +623,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <span className="font-mono font-bold text-sm w-9 text-center text-[#1F2421]">
+                      <span className="font-mono-data font-bold text-sm w-9 text-center text-[#1F2421]">
                         {item.quantity}
                       </span>
                       <button
@@ -614,6 +676,10 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
         ownerId={ownerId}
         onScanComplete={() => {
           setIsScanModalOpen(false);
+        }}
+        onManualFallback={() => {
+          setIsScanModalOpen(false);
+          handleOpenAddModal();
         }}
       />
 

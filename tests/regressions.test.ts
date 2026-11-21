@@ -687,3 +687,54 @@ test('releaseService accurately parses versions, detects upgrades, and formats f
   assert.equal(formatBytes(0), 'Unknown size');
   assert.equal(formatBytes(null), 'Unknown size');
 });
+
+test('getGeminiVisionStatus rejects placeholder API keys and recognizes valid keys', async () => {
+  const { getGeminiVisionStatus } = await import('../src/server/geminiVisionAdapter.ts');
+  const prevKey = process.env.GEMINI_API_KEY;
+  try {
+    process.env.GEMINI_API_KEY = 'MY_GEMINI_API_KEY';
+    assert.equal(getGeminiVisionStatus().status, 'not_configured');
+
+    process.env.GEMINI_API_KEY = '';
+    assert.equal(getGeminiVisionStatus().status, 'not_configured');
+
+    process.env.GEMINI_API_KEY = 'AIzaSyTestValidKey1234567890';
+    assert.equal(getGeminiVisionStatus().status, 'configured');
+  } finally {
+    if (prevKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = prevKey;
+  }
+});
+
+test('visionUtils pure client-safe normalization handles null, invalid categories, and negative prices', async () => {
+  const { normalizeCategory, normalizeConfidence, parseAndNormalizeVisionResponse } = await import(
+    '../src/utils/visionUtils.ts'
+  );
+  assert.equal(normalizeCategory('pre_filter'), 'spun_filter');
+  assert.equal(normalizeCategory('unknown_part_xyz'), 'other');
+  assert.equal(normalizeConfidence('invalid'), 'medium');
+
+  const nullResult = parseAndNormalizeVisionResponse(null);
+  assert.equal(nullResult.scanType, 'unrecognized');
+  assert.deepEqual(nullResult.items, []);
+
+  const normalized = parseAndNormalizeVisionResponse({
+    scanType: 'physical_parts',
+    items: [
+      {
+        name: '  10-inch Spun  ',
+        category: 'prefilter',
+        quantity: -3,
+        unitCost: -50,
+        sellingPrice: 120.456,
+        confidence: 'high',
+      },
+    ],
+  });
+  assert.equal(normalized.items.length, 1);
+  assert.equal(normalized.items[0].name, '10-inch Spun');
+  assert.equal(normalized.items[0].category, 'spun_filter');
+  assert.equal(normalized.items[0].quantity, 1);
+  assert.equal(normalized.items[0].unitCost, undefined);
+  assert.equal(normalized.items[0].sellingPrice, 120.46);
+});

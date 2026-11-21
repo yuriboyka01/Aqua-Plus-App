@@ -4,6 +4,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   onSnapshot,
   writeBatch,
   getDocs,
@@ -686,6 +687,8 @@ export async function addInventoryItem(
     : doc(collection(db, path));
   const docId = docRef.id;
 
+  const trimmedLocation = data.storageLocation?.trim();
+  const trimmedNotes = data.notes?.trim();
   const newItem: InventoryItem = {
     ...data,
     id: docId,
@@ -694,11 +697,16 @@ export async function addInventoryItem(
     lowStockThreshold: Math.max(0, Number(data.lowStockThreshold) || 0),
     unitCost: Math.max(0, Number(data.unitCost) || 0),
     sellingPrice: Math.max(0, Number(data.sellingPrice) || 0),
-    storageLocation: data.storageLocation?.trim() || undefined,
-    notes: data.notes?.trim() || undefined,
     createdAt: data.createdAt || nowIso,
     updatedAt: nowIso,
   };
+  if (trimmedLocation) newItem.storageLocation = trimmedLocation;
+  else delete newItem.storageLocation;
+  if (trimmedNotes) newItem.notes = trimmedNotes;
+  else delete newItem.notes;
+  for (const key of Object.keys(newItem) as (keyof InventoryItem)[]) {
+    if (newItem[key] === undefined) delete newItem[key];
+  }
 
   try {
     await withTimeout(setDoc(docRef, newItem));
@@ -740,11 +748,16 @@ export async function updateInventoryItem(
   if (sanitized.sellingPrice !== undefined) {
     sanitized.sellingPrice = Math.max(0, Number(sanitized.sellingPrice) || 0);
   }
-  if (sanitized.storageLocation !== undefined) {
-    sanitized.storageLocation = sanitized.storageLocation?.trim() || undefined;
+  if ('storageLocation' in sanitized) {
+    const trimmed = typeof sanitized.storageLocation === 'string' ? sanitized.storageLocation.trim() : '';
+    sanitized.storageLocation = trimmed ? trimmed : deleteField();
   }
-  if (sanitized.notes !== undefined) {
-    sanitized.notes = sanitized.notes?.trim() || undefined;
+  if ('notes' in sanitized) {
+    const trimmed = typeof sanitized.notes === 'string' ? sanitized.notes.trim() : '';
+    sanitized.notes = trimmed ? trimmed : deleteField();
+  }
+  for (const key of Object.keys(sanitized)) {
+    if (sanitized[key] === undefined) delete sanitized[key];
   }
 
   try {

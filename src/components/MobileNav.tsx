@@ -18,77 +18,89 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   pendingCount,
   lowStockCount = 0,
 }) => {
+  const navBtnClass = (isActive: boolean) =>
+    `relative flex-1 flex flex-col items-center justify-center py-1.5 px-1 min-h-12 rounded-xl transition-all ${
+      isActive
+        ? 'text-[#7EE787] font-semibold bg-[#174238]/70'
+        : 'text-[#86AB9F] hover:text-[#FAF8F3]'
+    }`;
+
   return (
-    <nav aria-label="Main navigation" className="fixed bottom-0 inset-x-0 z-40 bg-[#0C231F] border-t border-[#1C3E37] px-2 py-2 md:hidden shadow-xl flex items-center justify-around">
+    <nav
+      aria-label="Main navigation"
+      className="fixed bottom-0 inset-x-0 z-40 bg-[#0C231F]/95 backdrop-blur-md border-t border-[#1C3E37] px-1.5 pt-1.5 pb-safe md:hidden shadow-[0_-8px_24px_rgba(12,35,31,0.28)] flex items-center gap-0.5"
+    >
       <button
+        type="button"
         onClick={() => setActiveTab('dashboard')}
         aria-current={activeTab === 'dashboard' ? 'page' : undefined}
-        className={`flex flex-col items-center justify-center py-1 px-2 rounded min-w-[60px] min-h-12 rounded-lg transition-colors ${
-          activeTab === 'dashboard' ? 'text-[#7EE787] font-semibold' : 'text-[#86AB9F]'
-        }`}
+        className={navBtnClass(activeTab === 'dashboard')}
       >
-        <LayoutDashboard className="w-5 h-5" />
-        <span className="text-xs mt-1 font-medium">Home</span>
+        <LayoutDashboard className="w-4 h-4" />
+        <span className="text-[10px] mt-1 leading-none">Home</span>
       </button>
 
       <button
+        type="button"
         onClick={() => setActiveTab('customers')}
         aria-current={activeTab === 'customers' ? 'page' : undefined}
-        className={`flex flex-col items-center justify-center py-1 px-2 min-w-[60px] min-h-12 rounded-lg transition-colors ${
-          activeTab === 'customers' ? 'text-[#7EE787] font-semibold' : 'text-[#86AB9F]'
-        }`}
+        className={navBtnClass(activeTab === 'customers')}
       >
-        <Users className="w-5 h-5" />
-        <span className="text-xs mt-1 font-medium">Customers</span>
+        <Users className="w-4 h-4" />
+        <span className="text-[10px] mt-1 leading-none">Customers</span>
       </button>
 
       {/* Floating Center Service Recorder with Tactile Amber Accent */}
-      <button
-        onClick={onOpenRecordService}
-        aria-label="Record service visit"
-        className="flex flex-col items-center justify-center -mt-6 bg-[#C25E00] hover:bg-[#A34F00] text-[#FAF8F3] w-14 h-14 rounded-full shadow-lg border-2 border-[#FAF8F3] active:scale-95 transition-transform"
-        title="Record Completed Service Visit"
-      >
-        <Wrench className="w-5 h-5" />
-      </button>
+      <div className="px-1 shrink-0">
+        <button
+          type="button"
+          onClick={onOpenRecordService}
+          aria-label="Record service visit"
+          className="flex items-center justify-center -mt-6 bg-[#C25E00] hover:bg-[#A34F00] text-[#FAF8F3] w-13 h-13 rounded-full shadow-lg border-2 border-[#FAF8F3] active:scale-95 transition-transform"
+          title="Record Completed Service Visit"
+        >
+          <Wrench className="w-5 h-5" />
+        </button>
+      </div>
 
       <button
+        type="button"
         onClick={() => setActiveTab('inventory')}
         aria-current={activeTab === 'inventory' ? 'page' : undefined}
-        className={`relative flex flex-col items-center justify-center py-1 px-2 min-w-[55px] min-h-12 rounded-lg transition-colors ${
-          activeTab === 'inventory' ? 'text-[#7EE787] font-semibold' : 'text-[#86AB9F]'
-        }`}
+        className={navBtnClass(activeTab === 'inventory')}
       >
-        <Package className="w-5 h-5" />
+        <Package className="w-4 h-4" />
         {lowStockCount > 0 && (
-          <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-[#F6D285]" />
+          <span className="absolute top-1 right-2.5 min-w-[14px] h-3.5 px-1 rounded-full bg-[#F6D285] text-[#0C231F] font-mono-data text-[9px] font-bold flex items-center justify-center">
+            {lowStockCount > 9 ? '9+' : lowStockCount}
+          </span>
         )}
-        <span className="text-xs mt-1 font-medium">Stock</span>
+        <span className="text-[10px] mt-1 leading-none">Stock</span>
       </button>
 
       <button
+        type="button"
         onClick={() => setActiveTab('reminders')}
         aria-current={activeTab === 'reminders' ? 'page' : undefined}
-        className={`relative flex flex-col items-center justify-center py-1 px-2 min-w-[60px] min-h-12 rounded-lg transition-colors ${
-          activeTab === 'reminders' ? 'text-[#7EE787] font-semibold' : 'text-[#86AB9F]'
-        }`}
+        className={navBtnClass(activeTab === 'reminders')}
       >
-        <BellRing className="w-5 h-5" />
+        <BellRing className="w-4 h-4" />
         {pendingCount > 0 && (
-          <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-[#E07A5F]" />
+          <span className="absolute top-1 right-2.5 min-w-[14px] h-3.5 px-1 rounded-full bg-[#E07A5F] text-white font-mono-data text-[9px] font-bold flex items-center justify-center">
+            {pendingCount > 9 ? '9+' : pendingCount}
+          </span>
         )}
-        <span className="text-xs mt-1 font-medium">Reminders</span>
+        <span className="text-[10px] mt-1 leading-none">Queue</span>
       </button>
 
       <button
+        type="button"
         onClick={() => setActiveTab('settings')}
         aria-current={activeTab === 'settings' ? 'page' : undefined}
-        className={`flex flex-col items-center justify-center py-1 px-2 min-w-[60px] min-h-12 rounded-lg transition-colors ${
-          activeTab === 'settings' ? 'text-[#7EE787] font-semibold' : 'text-[#86AB9F]'
-        }`}
+        className={navBtnClass(activeTab === 'settings')}
       >
-        <Settings className="w-5 h-5" />
-        <span className="text-xs mt-1 font-medium">Settings</span>
+        <Settings className="w-4 h-4" />
+        <span className="text-[10px] mt-1 leading-none">Settings</span>
       </button>
     </nav>
   );

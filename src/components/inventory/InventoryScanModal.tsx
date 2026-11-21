@@ -32,6 +32,7 @@ interface InventoryScanModalProps {
   existingInventory: InventoryItem[];
   ownerId: string;
   onScanComplete: () => void;
+  onManualFallback?: () => void;
 }
 
 export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
@@ -40,9 +41,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   existingInventory,
   ownerId,
   onScanComplete,
+  onManualFallback,
 }) => {
-  if (!isOpen) return null;
-
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,6 +57,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  if (!isOpen) return null;
+
   const resetState = () => {
     setSelectedFile(null);
     setImagePreview(null);
@@ -67,6 +69,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     setScanResult(null);
     setEditableItems([]);
     setErrorMessage(null);
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleClose = () => {
@@ -387,7 +391,47 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
             </div>
           )}
 
-          {/* STEP 2: Review & Confirmation Table */}
+          {/* STEP 2A: Unrecognized / Empty Fallback */}
+          {scanResult && editableItems.length === 0 && (
+            <div className="p-6 bg-white rounded-xl border border-[#DDD6C5] text-center space-y-4">
+              <div className="w-12 h-12 mx-auto bg-amber-50 text-[#C25E00] rounded-full flex items-center justify-center border border-amber-200">
+                <HelpCircle className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-[#1F2421]">
+                  Could Not Recognize Spare Parts or Invoice
+                </h3>
+                <p className="text-xs text-[#5C6E67] max-w-md mx-auto">
+                  Try taking a clearer, well-lit photo of the parts or paper bill, or switch to manual entry to add the item directly.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={resetState}
+                  className="w-full sm:w-auto px-4 py-2 bg-[#0C231F] hover:bg-[#163830] text-[#FAF8F3] text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <RotateCw className="w-3.5 h-3.5 text-[#7EE787]" />
+                  <span>Try Another Photo</span>
+                </button>
+                {onManualFallback && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetState();
+                      onManualFallback();
+                    }}
+                    className="w-full sm:w-auto px-4 py-2 bg-[#C25E00] hover:bg-[#A34F00] text-[#FAF8F3] text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#FFD8B2]" />
+                    <span>Enter Manually Instead</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2B: Review & Confirmation Table */}
           {scanResult && editableItems.length > 0 && (
             <div className="space-y-4">
               {/* Scan summary banner */}

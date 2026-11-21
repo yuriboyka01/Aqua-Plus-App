@@ -338,6 +338,14 @@ export function createApiMiddleware(): Connect.NextHandleFunction {
           return;
         }
         const result = await scanInventoryWithGeminiVision({ imageBase64, mimeType });
+        if (result.error === 'GEMINI_NOT_CONFIGURED') {
+          sendJson(res, 503, { error: result.rawSummary || 'Gemini Vision AI is not configured on the server.' });
+          return;
+        }
+        if (result.error && /quota|429|resource_exhausted|rate limit/i.test(result.error)) {
+          sendJson(res, 429, { error: 'AI scan quota temporarily exhausted. Please wait a moment or enter items manually.' });
+          return;
+        }
         sendJson(res, 200, result);
         return;
       }

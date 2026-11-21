@@ -39,10 +39,10 @@
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | M1 | Data Models, Firestore & Security Rules | Features 1, 2, 3, 4: TypeScript types, Firestore CRUD, security rules, sample data | none | DONE |
-| M2 | Gemini Vision AI Service & Image Pipeline | Features 5, 6, 7, 8: Server scan endpoint, `@google/genai` adapter, canvas pre-processor, error handling | M1 | IN_PROGRESS |
-| M3 | Inventory Catalog Page & Vision Review Modal | Features 9, 10, 11, 12, 13, 14, 15, 16, 17: UI catalog, KPI cards, filters, modals, scanner & confirmation workflow | M1, M2 | PLANNED |
-| M4 | Navigation Integration & Service Record Linkage | Features 18, 19, 20, 21: Sidebar, MobileNav, App.tsx routing, RecordServiceModal parts deduction | M1, M3 | PLANNED |
-| M5 | Final Milestone: E2E Test Pass & Adversarial Hardening | Features 22, 23, 24: 100% E2E test pass (Tiers 1-4), adversarial test hardening (Tier 5), sample parts/invoices verification | M1, M2, M3, M4 | PLANNED |
+| M2 | Gemini Vision AI Service & Image Pipeline | Features 5, 6, 7, 8: Server scan endpoint, `@google/genai` adapter, canvas pre-processor, error handling | M1 | DONE |
+| M3 | Inventory Catalog Page & Vision Review Modal | Features 9, 10, 11, 12, 13, 14, 15, 16, 17: UI catalog, KPI cards, filters, modals, scanner & confirmation workflow | M1, M2 | DONE |
+| M4 | Navigation Integration & Service Record Linkage | Features 18, 19, 20, 21: Sidebar, MobileNav, App.tsx routing, RecordServiceModal parts deduction | M1, M3 | DONE |
+| M5 | Final Milestone: E2E Test Pass & Adversarial Hardening | Features 22, 23, 24: Automated regressions, adversarial tests, in-app test runner, build verification | M1, M2, M3, M4 | DONE |
 
 ## Interface Contracts
 

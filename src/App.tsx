@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Sidebar, ActiveTab } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { MobileNav } from './components/MobileNav';
+import { LoginPage } from './components/LoginPage';
 
 // Modals are loaded only when opened to keep the initial workspace bundle small.
 const CustomerModal = lazy(() => import('./components/CustomerModal').then((module) => ({ default: module.CustomerModal })));
@@ -63,7 +64,7 @@ import { testFirestoreConnection } from './lib/firebase';
 import { runDailyBatch } from './services/apiService';
 import { BUSINESS_OWNER_ID, DEFAULT_SETTINGS } from './lib/constants';
 import { getTodayKolkata, getDaysUntilDate } from './utils/dateUtils';
-import { Droplets, LogIn, ShieldAlert, Sparkles, KeyRound, Mail, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { Droplets } from 'lucide-react';
 
 function AquaPlusApp() {
   const {
@@ -77,14 +78,6 @@ function AquaPlusApp() {
     authError,
     clearAuthError,
   } = useAuth();
-
-  // Login form state
-  const [authMethod, setAuthMethod] = useState<'password' | 'google'>('password');
-  const [loginEmail, setLoginEmail] = useState('nisanth.t9c@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
-  const [submittingPassword, setSubmittingPassword] = useState(false);
 
   // App Navigation
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -225,8 +218,8 @@ function AquaPlusApp() {
           await adjustInventoryQuantity(
             part.itemId,
             -part.quantity,
-            effectiveOwnerId,
-            `Used in service visit for ${customer.fullName}`
+            `Used in service visit for ${customer.fullName}`,
+            effectiveOwnerId
           );
         } catch (err) {
           console.warn(`Failed to deduct inventory for ${part.itemId}:`, err);
@@ -281,204 +274,18 @@ function AquaPlusApp() {
     }
   };
 
-  // If user is not logged in, render the login & welcome portal
   if (!currentUser || !isOwner) {
-    const handlePasswordSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!loginEmail || !loginPassword) return;
-      try {
-        setSubmittingPassword(true);
-        await signInWithEmail(loginEmail, loginPassword);
-      } catch {
-        // Error state handled inside AuthContext
-      } finally {
-        setSubmittingPassword(false);
-      }
-    };
-
-    const handleSendReset = async () => {
-      if (!loginEmail) return;
-      const success = await sendPasswordReset(loginEmail);
-      if (success) {
-        setResetSent(true);
-      }
-    };
-
     return (
-      <div className="min-h-screen bg-[#0A1D1E] text-slate-100 flex flex-col justify-center items-center p-4 selection:bg-teal-500 selection:text-white">
-        <div className="w-full max-w-md bg-[#0F292B] border border-[#1B3E42] rounded-2xl p-6 md:p-8 shadow-2xl space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-20 h-20 rounded-full bg-white border-2 border-cyan-300 flex items-center justify-center mx-auto shadow-lg overflow-hidden">
-              <img src="/aqua-plus-logo.jpg" alt="Aqua Plus RO Tech" className="w-full h-full object-contain" />
-            </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">
-              AquaPlus Service
-            </h1>
-            <p className="text-xs text-teal-300 font-medium">
-              Aqua Plus RO Tech • Thirunagar 3rd Stop, near BATA showroom, Madurai
-            </p>
-          </div>
-
-          <div className="bg-[#143538] p-4 rounded-xl border border-[#1E484C] text-xs text-slate-300 space-y-1.5 leading-relaxed">
-            <p className="font-semibold text-white flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-teal-400" />
-              {currentUser ? 'Access Restricted' : 'Owner-Only Authorization Portal'}
-            </p>
-            <p>
-              {currentUser
-                ? 'This account is not authorized for Aqua Plus business records. Sign out and use an authorized business account.'
-                : 'Manage customer records, RO purifier service histories, and automated reminder schedules.'}
-            </p>
-          </div>
-
-          {authError && (
-            <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-lg text-rose-200 text-xs leading-relaxed">
-              {authError}
-            </div>
-          )}
-
-          {resetSent && (
-            <div className="p-3 bg-teal-950/80 border border-teal-700 rounded-lg text-teal-200 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
-              <span>Password setup link sent to {loginEmail}. Check your inbox!</span>
-            </div>
-          )}
-
-          {currentUser ? (
-            <div className="pt-2">
-              <button
-                onClick={logOut}
-                disabled={authLoading}
-                className="w-full py-3 px-4 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-all"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Sign Out ({currentUser.email})</span>
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4 pt-1">
-              {/* Method Switcher */}
-              <div className="grid grid-cols-2 p-1 bg-[#143538] border border-[#1E484C] rounded-xl text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod('password');
-                    clearAuthError();
-                  }}
-                  className={`py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                    authMethod === 'password'
-                      ? 'bg-teal-500 text-[#0F292B] shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Password Login</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod('google');
-                    clearAuthError();
-                  }}
-                  className={`py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                    authMethod === 'google'
-                      ? 'bg-teal-500 text-[#0F292B] shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Google Sign-In</span>
-                </button>
-              </div>
-
-              {authMethod === 'password' ? (
-                <form onSubmit={handlePasswordSubmit} className="space-y-3.5">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                      Business Owner Email
-                    </label>
-                    <select
-                      value={loginEmail}
-                      onChange={(e) => {
-                        setLoginEmail(e.target.value);
-                        setResetSent(false);
-                      }}
-                      className="w-full bg-[#143538] border border-[#1E484C] text-slate-100 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-teal-400"
-                    >
-                      <option value="nisanth.t9c@gmail.com">nisanth.t9c@gmail.com (Nisanth)</option>
-                      <option value="aquaplusrosales@gmail.com">aquaplusrosales@gmail.com (Aqua Plus)</option>
-                      <option value="vishaalchinnan@gmail.com">vishaalchinnan@gmail.com (Vishaal)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                      Account Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="Enter your password"
-                        required
-                        className="w-full bg-[#143538] border border-[#1E484C] text-slate-100 rounded-xl px-3 py-2.5 text-xs pr-10 focus:outline-none focus:border-teal-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={submittingPassword || authLoading || !loginPassword}
-                    className="w-full py-3 px-4 bg-teal-500 hover:bg-teal-400 text-[#0F292B] font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-all transform active:scale-98 disabled:opacity-50"
-                  >
-                    <KeyRound className="w-4 h-4" />
-                    <span>{submittingPassword ? 'Signing in...' : 'Sign In with Password'}</span>
-                  </button>
-
-                  <div className="text-center pt-1">
-                    <button
-                      type="button"
-                      onClick={handleSendReset}
-                      className="text-[11px] text-teal-300 hover:text-teal-200 underline underline-offset-2 transition-colors"
-                    >
-                      Need to set or reset your password? Send email link
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-[11px] text-slate-400 leading-normal text-center">
-                    Uses your Google account. (Requires your domain/IP in Firebase Authorized Domains).
-                  </p>
-                  <button
-                    type="button"
-                    onClick={signInWithGoogle}
-                    disabled={authLoading}
-                    className="w-full py-3 px-4 bg-teal-500 hover:bg-teal-400 text-[#0F292B] font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2.5 transition-all transform active:scale-98 disabled:opacity-50"
-                  >
-                    <LogIn className="w-5 h-5" />
-                    <span>{authLoading ? 'Verifying...' : 'Sign In with Google Account'}</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="text-center pt-1">
-            <p className="text-[11px] text-teal-400/60 font-mono">
-              Authorized business accounts only
-            </p>
-          </div>
-        </div>
-      </div>
+      <LoginPage
+        currentUser={currentUser}
+        authLoading={authLoading}
+        authError={authError}
+        onClearAuthError={clearAuthError}
+        onSignInWithEmail={signInWithEmail}
+        onSignInWithGoogle={signInWithGoogle}
+        onSendPasswordReset={sendPasswordReset}
+        onLogOut={logOut}
+      />
     );
   }
 
@@ -547,6 +354,7 @@ function AquaPlusApp() {
               serviceRecords={serviceRecords}
               reminders={reminders}
               messageAttempts={attemptsWithDelivery}
+              inventory={inventory}
               setActiveTab={setActiveTab}
               onOpenAddCustomer={handleOpenAddCustomer}
               onOpenRecordService={() => handleOpenRecordService()}
@@ -574,22 +382,22 @@ function AquaPlusApp() {
             <InventoryPage
               inventory={inventory}
               onAddItem={async (data) => {
-                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
-                await addInventoryItem(data, effectiveOwnerId);
+                await addInventoryItem(data, BUSINESS_OWNER_ID);
+                showToast('Part Added', `${data.name} added to store inventory.`, 'success');
               }}
               onUpdateItem={async (id, updates) => {
-                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
-                await updateInventoryItem(id, updates, effectiveOwnerId);
+                await updateInventoryItem(id, updates, BUSINESS_OWNER_ID);
+                showToast('Part Updated', `${updates.name || 'Inventory item'} updated.`, 'success');
               }}
               onAdjustQuantity={async (id, delta, reason) => {
-                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
-                await adjustInventoryQuantity(id, delta, effectiveOwnerId, reason);
+                await adjustInventoryQuantity(id, delta, reason || 'Manual stock adjustment', BUSINESS_OWNER_ID);
               }}
               onDeleteItem={async (id) => {
-                const effectiveOwnerId = currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID;
-                await deleteInventoryItem(id, effectiveOwnerId);
+                await deleteInventoryItem(id, BUSINESS_OWNER_ID);
+                showToast('Part Removed', 'Inventory item deleted.', 'warning');
               }}
-              ownerId={currentUser && isOwner ? currentUser.uid : BUSINESS_OWNER_ID}
+              ownerId={BUSINESS_OWNER_ID}
+              initialSearch={searchQuery}
             />
           )}
 
@@ -655,6 +463,7 @@ function AquaPlusApp() {
               }}
               customers={customers}
               serviceRecords={serviceRecords}
+              inventory={inventory}
               onOpenSeedDataModal={() => setIsSeedModalOpen(true)}
               hasSampleData={hasSampleData}
             />

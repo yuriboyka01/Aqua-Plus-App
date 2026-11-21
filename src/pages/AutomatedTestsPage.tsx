@@ -33,13 +33,13 @@ export const AutomatedTestsPage: React.FC = () => {
             <span>·</span>
             <span>Safety & Business Logic Invariants</span>
             <span>·</span>
-            <span className="font-mono-data text-[#165B50] font-semibold">11 Specification Rules</span>
+            <span className="font-mono-data text-[#165B50] font-semibold">{total || 14} Specification Rules</span>
           </div>
           <h1 className="font-editorial text-2xl font-bold text-[#1B2421] tracking-tight">
             System Invariant & Business Logic Console
           </h1>
           <p className="text-xs text-[#5C6E67] mt-0.5">
-            Unit test verification suite certifying next-service dates, manual override logic, idempotency hashes, and consent guards.
+            Unit test verification suite certifying next-service dates, manual override logic, idempotency hashes, consent guards, and inventory/vision rules.
           </p>
         </div>
 
@@ -49,7 +49,7 @@ export const AutomatedTestsPage: React.FC = () => {
           className="px-4 py-2.5 bg-[#163830] hover:bg-[#0E2822] text-[#FAF8F3] font-bold text-xs rounded shadow-sm flex items-center gap-2 transition-all active:scale-98 disabled:opacity-50 shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-[#7EE787] ${running ? 'animate-spin' : ''}`} />
-          <span>{running ? 'Evaluating Invariants...' : 'Re-Run All 11 Tests'}</span>
+          <span>{running ? 'Evaluating Invariants...' : `Re-Run All ${total || 14} Tests`}</span>
         </button>
       </div>
 

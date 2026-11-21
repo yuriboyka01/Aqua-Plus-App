@@ -115,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'System checks',
       sublabel: 'Business logic checks',
       icon: ShieldCheck,
-      badge: '11/11',
+      badge: '14/14',
       badgeColor: 'text-[#9EE8C8]',
     },
   ];

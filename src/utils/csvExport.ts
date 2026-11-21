@@ -1,4 +1,4 @@
-import { Customer, ServiceRecord } from '../types';
+import { Customer, ServiceRecord, InventoryItem, INVENTORY_CATEGORY_LABELS, getStockStatus, STOCK_STATUS_LABELS } from '../types';
 import { formatDisplayDate } from './dateUtils';
 
 function escapeCsvCell(value: any): string {
@@ -100,6 +100,44 @@ export function exportServiceRecordsToCsv(records: ServiceRecord[]): void {
 
   const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
   downloadBlob(csvContent, `AquaPlus_Service_History_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+}
+
+export function exportInventoryToCsv(items: InventoryItem[]): void {
+  const headers = [
+    'Item ID',
+    'Part Name',
+    'Category',
+    'Quantity In Stock',
+    'Low-Stock Threshold',
+    'Stock Status',
+    'Unit Cost (INR)',
+    'Selling Price (INR)',
+    'Total Cost Value (INR)',
+    'Storage Location',
+    'Notes',
+    'Last Updated',
+  ];
+
+  const rows = items.map((item) => {
+    const status = getStockStatus(item);
+    return [
+      escapeCsvCell(item.id),
+      escapeCsvCell(item.name),
+      escapeCsvCell(INVENTORY_CATEGORY_LABELS[item.category] || item.category),
+      escapeCsvCell(item.quantity),
+      escapeCsvCell(item.lowStockThreshold),
+      escapeCsvCell(STOCK_STATUS_LABELS[status] || status),
+      escapeCsvCell(item.unitCost),
+      escapeCsvCell(item.sellingPrice),
+      escapeCsvCell(Math.max(0, item.quantity) * (item.unitCost || 0)),
+      escapeCsvCell(item.storageLocation || ''),
+      escapeCsvCell(item.notes || ''),
+      escapeCsvCell(item.updatedAt || ''),
+    ];
+  });
+
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  downloadBlob(csvContent, `AquaPlus_Inventory_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
 }
 
 function downloadBlob(content: string, filename: string, mimeType: string): void {

@@ -15,8 +15,9 @@ import {
   ChevronRight,
   MapPin,
   ExternalLink,
+  Package,
 } from 'lucide-react';
-import { Customer, ServiceRecord, Reminder, MessageAttempt } from '../types';
+import { Customer, ServiceRecord, Reminder, MessageAttempt, InventoryItem, getStockStatus } from '../types';
 import {
   formatDisplayDate,
   getTodayKolkata,
@@ -30,6 +31,7 @@ interface DashboardPageProps {
   serviceRecords: ServiceRecord[];
   reminders: Reminder[];
   messageAttempts: MessageAttempt[];
+  inventory?: InventoryItem[];
   setActiveTab: (tab: ActiveTab) => void;
   onOpenAddCustomer: () => void;
   onOpenRecordService: (customer?: Customer) => void;
@@ -43,6 +45,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   serviceRecords,
   reminders,
   messageAttempts,
+  inventory = [],
   setActiveTab,
   onOpenAddCustomer,
   onOpenRecordService,
@@ -76,6 +79,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const currentMonth = today.slice(0, 7);
   const thisMonthServices = serviceRecords.filter((s) => s.serviceDate.startsWith(currentMonth));
   const thisMonthRevenue = thisMonthServices.reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
+
+  const lowStockItems = inventory
+    .filter((item) => getStockStatus(item) === 'out_of_stock' || getStockStatus(item) === 'low_stock')
+    .sort((a, b) => a.quantity - b.quantity);
+  const outOfStockCount = lowStockItems.filter((item) => item.quantity <= 0).length;
 
   // High priority worklist: Overdue first, then Due Today
   const followUpWorklist = [...overdueReminders, ...dueTodayReminders];
@@ -171,6 +179,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 </span>
                 <span className="text-[10px] text-[#7A9C91] ml-1">({thisMonthServices.length} visits)</span>
               </div>
+
+              <div className="w-px h-7 bg-[#1C3E37]" />
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('inventory')}
+                className="text-left group"
+                title="Open Inventory Management"
+              >
+                <span className="text-[11px] text-[#7A9C91] group-hover:text-[#FAF8F3] transition-colors block">Stock Alerts</span>
+                <span
+                  className={`font-mono-data text-base font-bold ${
+                    outOfStockCount > 0 ? 'text-[#FF8B8B]' : lowStockItems.length > 0 ? 'text-[#F6D285]' : 'text-[#9EE8C8]'
+                  }`}
+                >
+                  {lowStockItems.length}
+                </span>
+                <span className="text-[10px] text-[#7A9C91] ml-1">
+                  {lowStockItems.length === 0 ? 'healthy' : 'need restock'}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -395,7 +424,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                         </a>
 
                         <a
-                          href={`https://wa.me/91${rem.customerPhone.replace(/\D/g, '')}`}
+                          href={`https://wa.me/91${rem.customerPhone.replace(/\D/g, '').slice(-10)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-2.5 py-1 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#2D3733] rounded text-[11px] font-medium flex items-center gap-1 border border-[#DDD6C5] transition-colors"
@@ -480,6 +509,43 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             )}
           </div>
 
+          {/* Spare Parts Low-Stock Alert Card */}
+          {lowStockItems.length > 0 && (
+            <div className="p-4 bg-[#FFF7ED] border border-[#FDBA74] rounded-xl space-y-3 text-xs shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-bold text-[#9A3412]">
+                  <Package className="w-4 h-4 text-[#C25E00]" />
+                  <span>Spare Parts Attention ({lowStockItems.length})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('inventory')}
+                  className="text-[11px] font-bold text-[#C25E00] hover:underline flex items-center gap-0.5"
+                >
+                  <span>Restock</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {lowStockItems.slice(0, 4).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 bg-white/80 px-2.5 py-1.5 rounded-lg border border-[#FED7AA]"
+                  >
+                    <span className="font-medium text-[#1B2421] truncate">{item.name}</span>
+                    <span
+                      className={`font-mono-data text-[11px] font-bold shrink-0 ${
+                        item.quantity <= 0 ? 'text-rose-700' : 'text-[#C25E00]'
+                      }`}
+                    >
+                      {item.quantity <= 0 ? 'OUT' : `${item.quantity} left`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Quick Field Utilities Banner */}
           <div className="p-4 bg-[#F4F0E6] border border-[#E5DEC9] rounded-xl space-y-2 text-xs text-[#2D3733]">
             <span className="font-bold block text-[#1B2421]">Shop Actions</span>
@@ -495,6 +561,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 className="px-3 py-1.5 bg-[#FAF8F3] hover:bg-[#EDE7DA] border border-[#DDD6C5] rounded text-xs font-medium text-[#1B2421] transition-colors"
               >
                 Review Reminders
+              </button>
+              <button
+                onClick={() => setActiveTab('inventory')}
+                className="px-3 py-1.5 bg-[#FAF8F3] hover:bg-[#EDE7DA] border border-[#DDD6C5] rounded text-xs font-medium text-[#1B2421] transition-colors"
+              >
+                Manage Inventory
               </button>
               <button
                 onClick={() => setActiveTab('daily_reports')}

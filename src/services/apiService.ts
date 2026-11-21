@@ -109,6 +109,11 @@ export interface IntegrationStatusResponse {
     status: 'not_configured' | 'configured' | 'error';
     details: string;
   };
+  gemini?: {
+    status: 'not_configured' | 'configured' | 'error';
+    details: string;
+    model?: string;
+  };
 }
 
 export async function fetchIntegrationStatus(): Promise<IntegrationStatusResponse> {
@@ -136,6 +141,10 @@ export async function fetchIntegrationStatus(): Promise<IntegrationStatusRespons
       details: 'Backend server unavailable. Configure the API base URL and try again.',
     },
     email: {
+      status: 'error',
+      details: 'Backend server unavailable. Configure the API base URL and try again.',
+    },
+    gemini: {
       status: 'error',
       details: 'Backend server unavailable. Configure the API base URL and try again.',
     },

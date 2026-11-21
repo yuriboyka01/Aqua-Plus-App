@@ -93,11 +93,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
-                if (activeTab !== 'customers' && e.target.value.trim().length > 0) {
+                if (activeTab !== 'customers' && activeTab !== 'inventory' && e.target.value.trim().length > 0) {
                   setActiveTab('customers');
                 }
               }}
-              placeholder="Search purifiers, phone numbers, Madurai localities..."
+              placeholder={activeTab === 'inventory' ? 'Search spare parts, categories, bins...' : 'Search purifiers, phone numbers, Madurai localities...'}
               className="w-full pl-9 pr-16 py-2 text-xs bg-[#F4F0E6] border border-[#DDD6C5] rounded-md focus:outline-none focus:ring-1 focus:ring-[#163830] focus:border-[#163830] text-[#1B2421] placeholder:text-[#8C9B94] transition-all"
             />
             {searchQuery ? (
@@ -240,7 +240,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
-                if (activeTab !== 'customers' && e.target.value.trim().length > 0) {
+                if (activeTab !== 'customers' && activeTab !== 'inventory' && e.target.value.trim().length > 0) {
                   setActiveTab('customers');
                 }
               }}

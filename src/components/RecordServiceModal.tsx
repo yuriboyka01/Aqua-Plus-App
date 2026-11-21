@@ -97,6 +97,19 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
     if (!isOpen) return;
     setSavedRecord(null);
     setActiveStep(0);
+    setServiceDate(getTodayKolkata());
+    setServiceCategory('Routine Filter Change');
+    setProblemReported('Routine scheduled maintenance and TDS check');
+    setWorkPerformed('');
+    setFiltersReplaced('');
+    setServiceCharge(350);
+    setPartsCharge(600);
+    setPaymentStatus('Paid');
+    setIsDateOverridden(false);
+    setManualOverrideDate('');
+    setUsedParts([]);
+    setCustomerSearch('');
+    setValidationError(null);
   }, [isOpen]);
 
   useEffect(() => {
@@ -158,18 +171,33 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
   };
 
   const handleSelectInventoryPart = (invItem: InventoryItem) => {
+    const existing = usedParts.find((p) => p.itemId === invItem.id);
+    if (existing && existing.quantity >= invItem.quantity) return;
     if (!filtersReplaced.includes(invItem.name)) {
       setFiltersReplaced((prev) => (prev ? `${prev}, ${invItem.name}` : invItem.name));
     }
     setUsedParts((prev) => {
-      const existing = prev.find((p) => p.itemId === invItem.id);
-      if (existing) {
+      const current = prev.find((p) => p.itemId === invItem.id);
+      if (current) {
         return prev.map((p) => (p.itemId === invItem.id ? { ...p, quantity: p.quantity + 1 } : p));
       }
       return [...prev, { itemId: invItem.id, quantity: 1 }];
     });
     if (invItem.sellingPrice > 0) {
       setPartsCharge((prev) => Math.max(0, (Number(prev) || 0) + invItem.sellingPrice));
+    }
+  };
+
+  const handleDecrementInventoryPart = (invItem: InventoryItem) => {
+    const existing = usedParts.find((p) => p.itemId === invItem.id);
+    if (!existing) return;
+    setUsedParts((prev) =>
+      existing.quantity <= 1
+        ? prev.filter((p) => p.itemId !== invItem.id)
+        : prev.map((p) => (p.itemId === invItem.id ? { ...p, quantity: p.quantity - 1 } : p))
+    );
+    if (invItem.sellingPrice > 0) {
+      setPartsCharge((prev) => Math.max(0, (Number(prev) || 0) - invItem.sellingPrice));
     }
   };
 
@@ -462,29 +490,44 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
                     {inventory.map((inv) => {
                       const isUsed = usedParts.some((p) => p.itemId === inv.id);
                       const usedQty = usedParts.find((p) => p.itemId === inv.id)?.quantity || 0;
+                      const atStockCap = usedQty >= inv.quantity;
                       return (
-                        <button
-                          key={inv.id}
-                          type="button"
-                          onClick={() => handleSelectInventoryPart(inv)}
-                          disabled={inv.quantity <= 0}
-                          className={`px-2.5 py-1 text-[11px] rounded border transition-colors flex items-center gap-1 ${
-                            isUsed
-                              ? 'bg-[#163830] text-[#FAF8F3] border-[#163830]'
-                              : inv.quantity <= 0
+                        <div key={inv.id} className="inline-flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectInventoryPart(inv)}
+                            disabled={inv.quantity <= 0 || atStockCap}
+                            className={`px-2.5 py-1 text-[11px] border transition-colors flex items-center gap-1 ${
+                              isUsed ? 'rounded-l bg-[#163830] text-[#FAF8F3] border-[#163830]' : 'rounded'
+                            } ${
+                              !isUsed && inv.quantity <= 0
                                 ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                : 'bg-white hover:bg-[#FAF8F3] text-[#1F2421] border-[#DDD6C5]'
-                          }`}
-                          title={`Available: ${inv.quantity} in stock`}
-                        >
-                          <span>{inv.name}</span>
-                          <span className="font-mono text-[10px] text-[#C25E00] font-bold">₹{inv.sellingPrice}</span>
+                                : !isUsed
+                                  ? 'bg-white hover:bg-[#FAF8F3] text-[#1F2421] border-[#DDD6C5]'
+                                  : ''
+                            } ${atStockCap && isUsed ? 'opacity-90' : ''}`}
+                            title={`Available: ${inv.quantity} in stock`}
+                          >
+                            <span>{inv.name}</span>
+                            <span className="font-mono text-[10px] text-[#C25E00] font-bold">₹{inv.sellingPrice}</span>
+                            {isUsed && (
+                              <span className="ml-1 px-1 py-0.2 bg-[#7EE787] text-[#0C231F] rounded-full text-[9px] font-bold">
+                                ×{usedQty}
+                              </span>
+                            )}
+                          </button>
                           {isUsed && (
-                            <span className="ml-1 px-1 py-0.2 bg-[#7EE787] text-[#0C231F] rounded-full text-[9px] font-bold">
-                              ×{usedQty}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDecrementInventoryPart(inv)}
+                              aria-label={`Remove one ${inv.name}`}
+                              title="Remove one unit"
+                              className="px-1.5 py-1 text-[11px] font-bold bg-[#0E2822] hover:bg-rose-700 text-[#FAF8F3] border border-l-0 border-[#163830] rounded-r transition-colors"
+                            >
+                              −
+                            </button>
                           )}
-                        </button>
+                        </div>
                       );
                     })}
                   </div>

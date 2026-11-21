@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "node -e \"['dist','dist-server'].forEach(p=>require('fs').rmSync(p,{recursive:true,force:true}))\"",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/regressions.test.ts",
+    "test": "tsx --test tests/regressions.test.ts tests/adversarial-inventory-m1.test.ts",
     "test:rules:run": "tsx --test tests/firestore.rules.test.ts",
     "test:rules": "firebase emulators:exec --only firestore --project demo-aquaplus-service --config firebase.emulator.json \"npm run test:rules:run\"",
     "cap:sync": "npm run build && cap sync android",

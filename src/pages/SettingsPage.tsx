@@ -22,9 +22,9 @@ import {
   Smartphone,
   Download,
 } from 'lucide-react';
-import { AppSettings, Customer, ServiceRecord } from '../types';
+import { AppSettings, Customer, ServiceRecord, InventoryItem } from '../types';
 import { DEFAULT_SERVICE_CATEGORIES, APP_VERSION, APP_LATEST_RELEASE_URL, APP_RELEASES_URL } from '../lib/constants';
-import { exportCustomersToCsv, exportServiceRecordsToCsv } from '../utils/csvExport';
+import { exportCustomersToCsv, exportServiceRecordsToCsv, exportInventoryToCsv } from '../utils/csvExport';
 import { useAuth } from '../context/AuthContext';
 import {
   fetchIntegrationStatus,
@@ -40,6 +40,7 @@ interface SettingsPageProps {
   onSaveSettings: (updated: Partial<AppSettings>) => Promise<void>;
   customers: Customer[];
   serviceRecords: ServiceRecord[];
+  inventory?: InventoryItem[];
   onOpenSeedDataModal: () => void;
   hasSampleData: boolean;
 }
@@ -49,6 +50,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onSaveSettings,
   customers,
   serviceRecords,
+  inventory = [],
   onOpenSeedDataModal,
   hasSampleData,
 }) => {
@@ -58,14 +60,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [formData, setFormData] = useState<AppSettings>(settings);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Integration testing state
   const [integrationStatuses, setIntegrationStatuses] = useState<{
     whatsapp: { status: string; details: string };
     email: { status: string; details: string };
+    gemini: { status: string; details: string; model?: string };
   }>({
     whatsapp: { status: 'not_configured', details: 'Checking status...' },
     email: { status: 'not_configured', details: 'Checking status...' },
+    gemini: { status: 'not_configured', details: 'Checking status...' },
   });
 
   const [testPhone, setTestPhone] = useState('7010329920');
@@ -125,6 +130,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           status: res.email?.status || 'not_configured',
           details: res.email?.details || 'SMTP credentials not configured on server',
         },
+        gemini: {
+          status: res.gemini?.status || 'not_configured',
+          details: res.gemini?.details || 'GEMINI_API_KEY not configured on server',
+          model: res.gemini?.model,
+        },
       });
     } catch {
       // fallback
@@ -149,13 +159,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     e.preventDefault();
     setSaving(true);
     setSavedSuccess(false);
+    setSaveError(null);
     try {
       await onSaveSettings(formData);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to save settings.');
+      setSaveError(err?.message || 'Failed to save settings. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -222,6 +233,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
         )}
       </div>
+
+      {saveError && (
+        <div role="alert" className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{saveError}</span>
+          </div>
+          <button type="button" onClick={() => setSaveError(null)} className="text-[11px] font-bold hover:underline">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* SECTION 1: Business Identity & Shop Profile */}
@@ -410,6 +433,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           <p className="text-xs text-[#5C6E67] leading-relaxed">
             {integrationStatuses.whatsapp.details}
           </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#F4F0E6] border border-[#DDD6C5] rounded-lg text-[11px]">
+            <span className="font-semibold text-[#1B2421]">Gemini Vision AI (Inventory Scanner)</span>
+            <span className="font-mono-data text-[#5C6E67]">
+              {integrationStatuses.gemini.status === 'configured'
+                ? `Ready (${integrationStatuses.gemini.model || "gemini-2.5-flash"})`
+                : integrationStatuses.gemini.status === 'error'
+                  ? 'Backend unavailable'
+                  : 'API key not configured'}
+            </span>
+          </div>
 
           {/* All provider requests go through the protected backend; credentials never enter the client bundle. */}
           <div className="bg-[#EBF7F2] p-3.5 rounded-lg border border-[#C6EAD8] space-y-2 text-xs text-[#163830]">
@@ -423,7 +456,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-[#2D5A4C] leading-relaxed">
-              WhatsApp and email requests are sent through the protected AquaPlus backend. Meta and Resend credentials stay on the server and are never bundled into the web or Android app. Web deployments use the same-origin API. Android builds need the public HTTPS backend URL saved below, or VITE_API_BASE_URL set before building.
+              WhatsApp, email, and Gemini Vision AI inventory scan requests are sent through the protected AquaPlus backend. Meta and Resend credentials stay on the server and are never bundled into the web or Android app. Web deployments use the same-origin API. Android builds need the public HTTPS backend URL saved below, or VITE_API_BASE_URL set before building.
             </p>
 
             <details open={isNativeShell && !apiBaseUrl} className="mt-2 text-[11px] text-[#5C6E67]">
@@ -590,6 +623,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               className="px-3.5 py-2 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#1B2421] text-xs font-semibold rounded border border-[#DDD6C5] transition-colors"
             >
               Export Customers CSV ({customers.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => exportInventoryToCsv(inventory)}
+              className="px-3.5 py-2 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#1B2421] text-xs font-semibold rounded border border-[#DDD6C5] transition-colors"
+            >
+              Export Inventory CSV ({inventory.length})
             </button>
 
             <button
