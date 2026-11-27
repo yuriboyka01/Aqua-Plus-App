@@ -1,7 +1,7 @@
 import { AppSettings, ServiceCategory } from '../types/index.ts';
 
 // Application Version & Repository Release Metadata
-export const APP_VERSION = '0.0.8';
+export const APP_VERSION = '0.0.9';
 export const APP_REPO_OWNER = 'yuriboyka01';
 export const APP_REPO_NAME = 'Aqua-Plus-App';
 export const APP_REPO_URL = `https://github.com/${APP_REPO_OWNER}/${APP_REPO_NAME}`;

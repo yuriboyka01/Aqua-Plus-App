@@ -217,10 +217,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           await adjustInventoryQuantity(
             item.matchedItemId,
             item.quantity,
-            ownerId,
             scanResult?.scanType === 'supplier_invoice'
               ? `Supplier Invoice ${scanResult.invoiceNumber || 'Restock'}`
-              : 'AI Camera Scan Restock'
+              : 'AI Camera Scan Restock',
+            ownerId
           );
         } else {
           // Add as new item

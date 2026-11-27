@@ -16,6 +16,8 @@ import {
   MapPin,
   ExternalLink,
   Package,
+  ShoppingBag,
+  Users,
 } from 'lucide-react';
 import { Customer, ServiceRecord, Reminder, MessageAttempt, InventoryItem, getStockStatus } from '../types';
 import {
@@ -223,6 +225,89 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <span>{batchRunning ? 'Running...' : 'Run Morning Batch'}</span>
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* Quick Actions 1-Tap Strip */}
+      <section aria-label="Quick Actions" className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[#5C6E67] font-mono-data">
+            Quick Actions
+          </h2>
+          <span className="text-[11px] text-[#7A8C84] hidden sm:inline">1-tap daily workflows</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab('wholesale_sales')}
+            className="min-h-[56px] px-3 sm:px-4 py-3 bg-[#FAF8F3] hover:bg-[#F4F0E6] border border-[#DDD6C5] hover:border-[#C25E00] rounded-xl text-left flex items-center gap-2.5 sm:gap-3 shadow-2xs transition-all active:scale-[0.99] group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-[#FFF3E6] border border-[#FED7AA] flex items-center justify-center shrink-0">
+              <ShoppingBag className="w-4 h-4 text-[#C25E00]" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-[#1B2421] group-hover:text-[#0C231F] block leading-tight">
+                Wholesale Sale
+              </span>
+              <span className="text-[11px] text-[#5C6E67] block leading-tight mt-0.5">
+                Technicians & parts
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenRecordService()}
+            className="min-h-[56px] px-3 sm:px-4 py-3 bg-[#FAF8F3] hover:bg-[#F4F0E6] border border-[#DDD6C5] hover:border-[#163830] rounded-xl text-left flex items-center gap-2.5 sm:gap-3 shadow-2xs transition-all active:scale-[0.99] group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-[#EBF7F2] border border-[#C6EAD8] flex items-center justify-center shrink-0">
+              <Wrench className="w-4 h-4 text-[#165B50]" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-[#1B2421] group-hover:text-[#0C231F] block leading-tight">
+                Record Service
+              </span>
+              <span className="text-[11px] text-[#5C6E67] block leading-tight mt-0.5">
+                Visit & TDS reading
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('inventory')}
+            className="min-h-[56px] px-3 sm:px-4 py-3 bg-[#FAF8F3] hover:bg-[#F4F0E6] border border-[#DDD6C5] hover:border-[#163830] rounded-xl text-left flex items-center gap-2.5 sm:gap-3 shadow-2xs transition-all active:scale-[0.99] group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-[#F4F0E6] border border-[#DDD6C5] flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4 text-[#0C231F]" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-[#1B2421] group-hover:text-[#0C231F] block leading-tight">
+                Stock & Parts
+              </span>
+              <span className="text-[11px] text-[#5C6E67] block leading-tight mt-0.5">
+                Check & restock
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('customers')}
+            className="min-h-[56px] px-3 sm:px-4 py-3 bg-[#FAF8F3] hover:bg-[#F4F0E6] border border-[#DDD6C5] hover:border-[#163830] rounded-xl text-left flex items-center gap-2.5 sm:gap-3 shadow-2xs transition-all active:scale-[0.99] group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-[#F4F0E6] border border-[#DDD6C5] flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4 text-[#163830]" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-[#1B2421] group-hover:text-[#0C231F] block leading-tight">
+                Customers
+              </span>
+              <span className="text-[11px] text-[#5C6E67] block leading-tight mt-0.5">
+                Fleet & service log
+              </span>
+            </div>
+          </button>
         </div>
       </section>
 

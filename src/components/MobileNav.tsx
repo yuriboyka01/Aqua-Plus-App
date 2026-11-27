@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Wrench, BellRing, Settings, Package } from 'lucide-react';
+import { LayoutDashboard, Wrench, BellRing, ShoppingBag, Package } from 'lucide-react';
 import { ActiveTab } from './Sidebar';
 
 interface MobileNavProps {
@@ -42,12 +42,17 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 
       <button
         type="button"
-        onClick={() => setActiveTab('customers')}
-        aria-current={activeTab === 'customers' ? 'page' : undefined}
-        className={navBtnClass(activeTab === 'customers')}
+        onClick={() => setActiveTab('inventory')}
+        aria-current={activeTab === 'inventory' ? 'page' : undefined}
+        className={navBtnClass(activeTab === 'inventory')}
       >
-        <Users className="w-4 h-4" />
-        <span className="text-[10px] mt-1 leading-none">Customers</span>
+        <Package className="w-4 h-4" />
+        {lowStockCount > 0 && (
+          <span className="absolute top-1 right-2.5 min-w-[14px] h-3.5 px-1 rounded-full bg-[#F6D285] text-[#0C231F] font-mono-data text-[9px] font-bold flex items-center justify-center">
+            {lowStockCount > 9 ? '9+' : lowStockCount}
+          </span>
+        )}
+        <span className="text-[10px] mt-1 leading-none">Stock</span>
       </button>
 
       {/* Floating Center Service Recorder with Tactile Amber Accent */}
@@ -65,17 +70,12 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 
       <button
         type="button"
-        onClick={() => setActiveTab('inventory')}
-        aria-current={activeTab === 'inventory' ? 'page' : undefined}
-        className={navBtnClass(activeTab === 'inventory')}
+        onClick={() => setActiveTab('wholesale_sales')}
+        aria-current={activeTab === 'wholesale_sales' ? 'page' : undefined}
+        className={navBtnClass(activeTab === 'wholesale_sales')}
       >
-        <Package className="w-4 h-4" />
-        {lowStockCount > 0 && (
-          <span className="absolute top-1 right-2.5 min-w-[14px] h-3.5 px-1 rounded-full bg-[#F6D285] text-[#0C231F] font-mono-data text-[9px] font-bold flex items-center justify-center">
-            {lowStockCount > 9 ? '9+' : lowStockCount}
-          </span>
-        )}
-        <span className="text-[10px] mt-1 leading-none">Stock</span>
+        <ShoppingBag className="w-4 h-4" />
+        <span className="text-[10px] mt-1 leading-none">Wholesale</span>
       </button>
 
       <button
@@ -91,16 +91,6 @@ export const MobileNav: React.FC<MobileNavProps> = ({
           </span>
         )}
         <span className="text-[10px] mt-1 leading-none">Queue</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setActiveTab('settings')}
-        aria-current={activeTab === 'settings' ? 'page' : undefined}
-        className={navBtnClass(activeTab === 'settings')}
-      >
-        <Settings className="w-4 h-4" />
-        <span className="text-[10px] mt-1 leading-none">Settings</span>
       </button>
     </nav>
   );

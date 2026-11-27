@@ -15,6 +15,7 @@ import {
   LogOut,
   MapPin,
   Package,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -22,6 +23,7 @@ export type ActiveTab =
   | 'dashboard'
   | 'customers'
   | 'inventory'
+  | 'wholesale_sales'
   | 'record_service'
   | 'service_history'
   | 'reminders'
@@ -75,6 +77,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'text-[#F6D285]',
     },
     {
+      id: 'wholesale_sales' as ActiveTab,
+      label: 'Wholesale Sales',
+      sublabel: 'Technician parts billing',
+      icon: ShoppingBag,
+      badge: null,
+    },
+    {
       id: 'record_service' as ActiveTab,
       label: 'Record service',
       sublabel: 'Log a completed visit',
@@ -119,8 +128,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'text-[#9EE8C8]',
     },
   ];
-  const primaryItems = navItems.slice(0, 6);
-  const secondaryItems = navItems.slice(6);
+  const primaryItems = navItems.slice(0, 7);
+  const secondaryItems = navItems.slice(7);
   const renderNavItem = (item: (typeof navItems)[number]) => {
     const Icon = item.icon;
     const isActive = activeTab === item.id;

@@ -23,6 +23,7 @@ const DailyReportsPage = lazy(() => import('./pages/DailyReportsPage').then((mod
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const AutomatedTestsPage = lazy(() => import('./pages/AutomatedTestsPage').then((module) => ({ default: module.AutomatedTestsPage })));
 const InventoryPage = lazy(() => import('./pages/InventoryPage').then((module) => ({ default: module.InventoryPage })));
+const WholesaleSalesPage = lazy(() => import('./pages/WholesaleSalesPage').then((module) => ({ default: module.WholesaleSalesPage })));
 
 // Types and Services
 import {
@@ -33,6 +34,9 @@ import {
   AppSettings,
   OwnerReport,
   InventoryItem,
+  WholesaleSale,
+  WholesaleSaleInput,
+  PaymentStatus,
   getStockStatus,
 } from './types';
 import {
@@ -59,6 +63,9 @@ import {
   updateInventoryItem,
   adjustInventoryQuantity,
   deleteInventoryItem,
+  subscribeWholesaleSales,
+  recordWholesaleSale,
+  updateWholesaleSalePaymentStatus,
 } from './services/dbService';
 import { testFirestoreConnection } from './lib/firebase';
 import { runDailyBatch } from './services/apiService';
@@ -93,6 +100,7 @@ function AquaPlusApp() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [ownerReports, setOwnerReports] = useState<OwnerReport[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [wholesaleSales, setWholesaleSales] = useState<WholesaleSale[]>([]);
 
   // Modals state
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -140,6 +148,7 @@ function AquaPlusApp() {
     const unsubSettings = subscribeSettings(effectiveOwnerId, setSettings);
     const unsubReports = subscribeOwnerReports(effectiveOwnerId, setOwnerReports);
     const unsubInventory = subscribeInventory(effectiveOwnerId, setInventory);
+    const unsubWholesale = subscribeWholesaleSales(effectiveOwnerId, setWholesaleSales);
 
     return () => {
       unsubCustomers();
@@ -150,6 +159,7 @@ function AquaPlusApp() {
       unsubSettings();
       unsubReports();
       unsubInventory();
+      unsubWholesale();
     };
   }, [currentUser, authLoading, isOwner]);
 
@@ -290,7 +300,7 @@ function AquaPlusApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F3] text-[#1B2421] flex flex-col antialiased">
+    <div className="min-h-screen bg-[#FAF8F3] text-[#1B2421] flex flex-col antialiased overflow-x-hidden">
       {/* Desktop Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -304,7 +314,7 @@ function AquaPlusApp() {
 
       {/* Main App Layout */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-200 ${
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ${
           sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
         } pb-16 md:pb-6`}
       >
@@ -398,6 +408,28 @@ function AquaPlusApp() {
               }}
               ownerId={BUSINESS_OWNER_ID}
               initialSearch={searchQuery}
+              onOpenWholesaleSales={() => setActiveTab('wholesale_sales')}
+            />
+          )}
+
+          {activeTab === 'wholesale_sales' && (
+            <WholesaleSalesPage
+              inventory={inventory}
+              wholesaleSales={wholesaleSales}
+              initialSearch={searchQuery}
+              onRecordSale={async (saleInput: WholesaleSaleInput) => {
+                const res = await recordWholesaleSale(saleInput, BUSINESS_OWNER_ID);
+                showToast(
+                  `Wholesale Bill ${res.billNumber} Saved`,
+                  `${saleInput.technicianName} · ₹${saleInput.totalAmount.toLocaleString('en-IN')} · Stock deducted`,
+                  'success'
+                );
+                return res;
+              }}
+              onUpdatePaymentStatus={async (saleId: string, status: PaymentStatus) => {
+                await updateWholesaleSalePaymentStatus(saleId, status, BUSINESS_OWNER_ID);
+                showToast('Payment Updated', `Marked wholesale bill as ${status}.`, 'success');
+              }}
             />
           )}
 

@@ -191,7 +191,8 @@ export type AuditEntityType =
   | 'Reminder'
   | 'Settings'
   | 'BatchScheduler'
-  | 'InventoryItem';
+  | 'InventoryItem'
+  | 'WholesaleSale';
 
 export interface AuditEvent {
   id: string;
@@ -456,5 +457,113 @@ export function calculateInventoryMetrics(items: InventoryItem[]): InventorySumm
     totalRetailValue,
     lowStockCount,
     outOfStockCount,
+  };
+}
+
+// ============================================================================
+// WHOLESALE / TECHNICIAN SALES DOMAIN TYPES & VALIDATION
+// ============================================================================
+
+export interface WholesaleSaleLineItem {
+  itemId: string;
+  itemName: string;
+  category: InventoryCategory;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface WholesaleSale {
+  id: string;
+  billNumber: string;
+  saleDate: string; // YYYY-MM-DD
+  technicianName: string;
+  technicianPhone?: string;
+  items: WholesaleSaleLineItem[];
+  totalUnits: number;
+  subtotal: number;
+  isCustomTotal: boolean;
+  totalAmount: number;
+  paymentStatus: PaymentStatus;
+  notes?: string;
+  isSampleData?: boolean;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WholesaleSaleInput = Omit<
+  WholesaleSale,
+  'id' | 'billNumber' | 'createdAt' | 'updatedAt' | 'ownerId'
+>;
+
+export interface WholesaleSaleValidationResult {
+  isValid: boolean;
+  errors: {
+    technicianName?: string;
+    technicianPhone?: string;
+    saleDate?: string;
+    items?: string;
+    totalAmount?: string;
+    notes?: string;
+  };
+}
+
+export function validateWholesaleSale(
+  data: Partial<WholesaleSaleInput>
+): WholesaleSaleValidationResult {
+  const errors: WholesaleSaleValidationResult['errors'] = {};
+
+  if (!data.technicianName || typeof data.technicianName !== 'string' || !data.technicianName.trim()) {
+    errors.technicianName = 'Technician name is required.';
+  } else if (data.technicianName.trim().length > 120) {
+    errors.technicianName = 'Technician name cannot exceed 120 characters.';
+  }
+
+  if (data.technicianPhone && data.technicianPhone.trim().length > 20) {
+    errors.technicianPhone = 'Phone number cannot exceed 20 characters.';
+  }
+
+  if (!data.saleDate || typeof data.saleDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.saleDate)) {
+    errors.saleDate = 'Valid sale date (YYYY-MM-DD) is required.';
+  }
+
+  if (!Array.isArray(data.items) || data.items.length === 0) {
+    errors.items = 'Add at least one spare part to complete the wholesale bill.';
+  } else if (data.items.length > 50) {
+    errors.items = 'A single wholesale bill cannot exceed 50 line items.';
+  } else {
+    for (const item of data.items) {
+      if (!item.itemId || !item.itemName) {
+        errors.items = 'Each line item must reference a valid spare part.';
+        break;
+      }
+      if (typeof item.quantity !== 'number' || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+        errors.items = `Quantity for "${item.itemName}" must be a whole number of at least 1.`;
+        break;
+      }
+      if (typeof item.unitPrice !== 'number' || Number.isNaN(item.unitPrice) || item.unitPrice < 0 || item.unitPrice > 1000000) {
+        errors.items = `Unit price for "${item.itemName}" must be between ₹0 and ₹1,000,000.`;
+        break;
+      }
+    }
+  }
+
+  if (
+    typeof data.totalAmount !== 'number' ||
+    Number.isNaN(data.totalAmount) ||
+    data.totalAmount < 0 ||
+    data.totalAmount > 10000000
+  ) {
+    errors.totalAmount = 'Bill total must be between ₹0 and ₹10,000,000.';
+  }
+
+  if (data.notes && data.notes.length > 500) {
+    errors.notes = 'Notes cannot exceed 500 characters.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
   };
 }

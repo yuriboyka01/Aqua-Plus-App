@@ -97,26 +97,40 @@ export const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
       });
       onClose();
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to save inventory item.');
+      const raw = err instanceof Error ? err.message : String(err || 'Failed to save inventory item.');
+      let friendly = raw;
+      if (raw.startsWith('{') && raw.includes('"error"')) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.error) {
+            friendly = parsed.path
+              ? `${parsed.error} (${parsed.operationType || 'write'} on ${parsed.path})`
+              : String(parsed.error);
+          }
+        } catch {
+          // Keep raw message if JSON parse fails
+        }
+      }
+      setErrorMessage(friendly);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0C231F]/65 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-lg bg-[#FAF8F3] rounded-2xl shadow-2xl border border-[#DDD6C5] overflow-hidden my-6 flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0C231F]/65 backdrop-blur-xs overflow-y-auto overflow-x-hidden">
+      <div className="relative w-full max-w-[min(32rem,100%)] bg-[#FAF8F3] rounded-2xl shadow-2xl border border-[#DDD6C5] overflow-hidden my-4 sm:my-6 flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 bg-[#0C231F] text-[#FAF8F3] flex items-center justify-between shrink-0 border-b border-[#1C3E37]">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#163830] rounded-lg text-[#7EE787]">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#0C231F] text-[#FAF8F3] flex items-center justify-between gap-2 shrink-0 border-b border-[#1C3E37]">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 bg-[#163830] rounded-lg text-[#7EE787] shrink-0">
               <Package className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold tracking-tight">
+            <div className="min-w-0">
+              <h2 className="text-base font-bold tracking-tight truncate">
                 {isEditing ? 'Edit Spare Part' : 'Add New Inventory Item'}
               </h2>
-              <p className="text-xs text-[#86AB9F]">
+              <p className="text-xs text-[#86AB9F] truncate">
                 {isEditing ? 'Update stock quantity, threshold, or pricing' : 'Record a new component or spare part in stock'}
               </p>
             </div>
@@ -124,18 +138,18 @@ export const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-[#86AB9F] hover:text-[#FAF8F3] p-1.5 rounded-lg hover:bg-[#163830] transition-colors"
+            className="text-[#86AB9F] hover:text-[#FAF8F3] p-1.5 rounded-lg hover:bg-[#163830] transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[calc(85vh-130px)]">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[calc(88vh-110px)]">
           {errorMessage && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-              <span>{errorMessage}</span>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <span className="break-words min-w-0">{errorMessage}</span>
             </div>
           )}
 
@@ -176,8 +190,8 @@ export const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
           </div>
 
           {/* Quantity & Low Stock Threshold */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="min-w-0">
               <label className="block text-xs font-semibold text-[#1F2421] mb-1">
                 Current Stock (Units) <span className="text-red-500">*</span>
               </label>
@@ -191,7 +205,7 @@ export const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                 className="w-full px-3 py-2 text-sm bg-white border border-[#DDD6C5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0C231F] text-[#1F2421] font-mono"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-semibold text-[#1F2421] mb-1">
                 Low-Stock Alert Level <span className="text-red-500">*</span>
               </label>
@@ -208,8 +222,8 @@ export const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
           </div>
 
           {/* Pricing: Unit Cost & Selling Price */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="min-w-0">
               <label className="block text-xs font-semibold text-[#1F2421] mb-1">
                 Procurement Cost (₹) <span className="text-red-500">*</span>
               </label>
@@ -224,7 +238,7 @@ export const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
               />
               <span className="text-[10px] text-[#5C6E67]">Purchase / wholesale price</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-semibold text-[#1F2421] mb-1">
                 Customer Selling Price (₹) <span className="text-red-500">*</span>
               </label>

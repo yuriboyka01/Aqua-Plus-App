@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Minus,
   Download,
+  ShoppingBag,
 } from 'lucide-react';
 import {
   InventoryItem,
@@ -42,6 +43,7 @@ interface InventoryPageProps {
   onDeleteItem: (id: string) => Promise<void>;
   ownerId: string;
   initialSearch?: string;
+  onOpenWholesaleSales?: () => void;
 }
 
 export const InventoryPage: React.FC<InventoryPageProps> = ({
@@ -52,6 +54,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
   onDeleteItem,
   ownerId,
   initialSearch = '',
+  onOpenWholesaleSales,
 }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [sortBy, setSortBy] = useState<'name' | 'stock_asc' | 'value_desc'>('name');
@@ -161,6 +164,23 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
     }
   };
 
+  const formatActionError = (err: unknown, fallback: string): string => {
+    const raw = err instanceof Error ? err.message : String(err || fallback);
+    if (raw.startsWith('{') && raw.includes('"error"')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed?.error) {
+          return parsed.path
+            ? `${parsed.error} (${parsed.operationType || 'write'} on ${parsed.path})`
+            : String(parsed.error);
+        }
+      } catch {
+        // Fall through to raw message
+      }
+    }
+    return raw || fallback;
+  };
+
   const handleQuickAdjust = async (item: InventoryItem, delta: number) => {
     setActionError(null);
     try {
@@ -174,7 +194,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
         delta > 0 ? 'Quick stock increment' : 'Quick stock reduction'
       );
     } catch (err: any) {
-      setActionError(err?.message || 'Failed to adjust stock quantity.');
+      setActionError(formatActionError(err, 'Failed to adjust stock quantity.'));
     }
   };
 
@@ -186,7 +206,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
       await onDeleteItem(itemToDelete.id);
       setItemToDelete(null);
     } catch (err: any) {
-      setActionError(err?.message || 'Failed to delete inventory item.');
+      setActionError(formatActionError(err, 'Failed to delete inventory item.'));
     } finally {
       setIsDeleting(false);
     }
@@ -229,7 +249,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
             className="px-4 py-2 bg-[#C25E00] hover:bg-[#A34F00] text-[#FAF8F3] text-xs font-bold rounded-lg shadow-sm flex items-center gap-2 transition-all active:scale-98"
           >
             <Camera className="w-4 h-4 text-[#FFD8B2]" />
-            <span>📷 AI Photo Scan</span>
+            <span>AI Photo Scan</span>
           </button>
 
           <button
@@ -240,19 +260,31 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
             <Plus className="w-4 h-4 text-[#7EE787]" />
             <span>Add Part</span>
           </button>
+
+          {onOpenWholesaleSales && (
+            <button
+              type="button"
+              onClick={onOpenWholesaleSales}
+              className="px-4 py-2 bg-[#F4F0E6] hover:bg-[#EDE7DA] text-[#1B2421] text-xs font-bold rounded-lg border border-[#D5CDBC] shadow-2xs flex items-center gap-2 transition-colors"
+              title="Sell spare parts to technicians in Wholesale Sales"
+            >
+              <ShoppingBag className="w-4 h-4 text-[#C25E00]" />
+              <span>Wholesale Sale</span>
+            </button>
+          )}
         </div>
       </div>
 
       {actionError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-            <span>{actionError}</span>
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start justify-between gap-2 min-w-0 overflow-hidden">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+            <span className="break-all min-w-0">{actionError}</span>
           </div>
           <button
             type="button"
             onClick={() => setActionError(null)}
-            className="text-xs font-bold text-red-700 hover:underline"
+            className="text-xs font-bold text-red-700 hover:underline shrink-0"
           >
             Dismiss
           </button>
@@ -567,9 +599,9 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   key={item.id}
                   className="bg-white p-4 rounded-xl border border-[#DDD6C5] shadow-xs space-y-3"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-bold text-sm text-[#1F2421]">{item.name}</div>
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-sm text-[#1F2421] break-words">{item.name}</div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-[#EAE6DC] text-[#0C231F]">
                           {INVENTORY_CATEGORY_LABELS[item.category] || item.category}
@@ -640,6 +672,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenEditModal(item)}
+                        aria-label={`Edit ${item.name}`}
                         className="p-2 text-[#5C6E67] hover:text-[#0C231F] rounded-lg hover:bg-[#FAF8F3]"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -647,6 +680,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                       <button
                         type="button"
                         onClick={() => setItemToDelete(item)}
+                        aria-label={`Delete ${item.name}`}
                         className="p-2 text-[#5C6E67] hover:text-red-600 rounded-lg hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />

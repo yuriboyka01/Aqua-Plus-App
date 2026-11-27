@@ -1,7 +1,7 @@
 {
   "name": "aquaplus-service",
   "private": true,
-  "version": "0.0.8",
+  "version": "0.0.9",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "node -e \"['dist','dist-server'].forEach(p=>require('fs').rmSync(p,{recursive:true,force:true}))\"",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/regressions.test.ts tests/adversarial-inventory-m1.test.ts",
+    "test": "tsx --test tests/regressions.test.ts tests/adversarial-inventory-m1.test.ts tests/wholesale-sales.test.ts",
     "test:rules:run": "tsx --test tests/firestore.rules.test.ts",
     "test:rules": "firebase emulators:exec --only firestore --project demo-aquaplus-service --config firebase.emulator.json \"npm run test:rules:run\"",
     "cap:sync": "npm run build && cap sync android",

@@ -1,4 +1,4 @@
-import { Customer, ServiceRecord, InventoryItem, INVENTORY_CATEGORY_LABELS, getStockStatus, STOCK_STATUS_LABELS } from '../types';
+import { Customer, ServiceRecord, InventoryItem, WholesaleSale, INVENTORY_CATEGORY_LABELS, getStockStatus, STOCK_STATUS_LABELS } from '../types';
 import { formatDisplayDate } from './dateUtils';
 
 function escapeCsvCell(value: any): string {
@@ -138,6 +138,41 @@ export function exportInventoryToCsv(items: InventoryItem[]): void {
 
   const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
   downloadBlob(csvContent, `AquaPlus_Inventory_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+}
+
+export function exportWholesaleSalesToCsv(sales: WholesaleSale[]): void {
+  const headers = [
+    'Bill Number',
+    'Sale Date',
+    'Technician Name',
+    'Technician Phone',
+    'Parts Sold',
+    'Total Units',
+    'Calculated Subtotal (INR)',
+    'Custom Total Used',
+    'Final Bill Amount (INR)',
+    'Payment Status',
+    'Notes',
+  ];
+
+  const rows = sales.map((sale) => [
+    escapeCsvCell(sale.billNumber),
+    escapeCsvCell(formatDisplayDate(sale.saleDate)),
+    escapeCsvCell(sale.technicianName),
+    escapeCsvCell(sale.technicianPhone || ''),
+    escapeCsvCell(
+      sale.items.map((item) => `${item.quantity}x ${item.itemName} (@₹${item.unitPrice})`).join('; ')
+    ),
+    escapeCsvCell(sale.totalUnits),
+    escapeCsvCell(sale.subtotal),
+    escapeCsvCell(sale.isCustomTotal ? 'Yes' : 'No'),
+    escapeCsvCell(sale.totalAmount),
+    escapeCsvCell(sale.paymentStatus),
+    escapeCsvCell(sale.notes || ''),
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  downloadBlob(csvContent, `AquaPlus_Wholesale_Sales_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
 }
 
 function downloadBlob(content: string, filename: string, mimeType: string): void {

@@ -24,6 +24,10 @@ import {
   AuditEvent,
   AuditEntityType,
   InventoryItem,
+  WholesaleSale,
+  WholesaleSaleInput,
+  PaymentStatus,
+  validateWholesaleSale,
 } from '../types';
 import { BUSINESS_OWNER_ID, DEFAULT_SETTINGS } from '../lib/constants';
 import { calculateNextReminderDate, getTodayKolkata } from '../utils/dateUtils';
@@ -809,10 +813,14 @@ export async function adjustInventoryQuantity(
         newQty = Math.max(0, rawNewQty);
         wasClamped = rawNewQty < 0;
 
-        transaction.update(docRef, {
+        const adjUpdate: Record<string, any> = {
           quantity: newQty,
           updatedAt: nowIso,
-        });
+        };
+        if ((data as any).storageLocation === null) adjUpdate.storageLocation = deleteField();
+        if ((data as any).notes === null) adjUpdate.notes = deleteField();
+        if ((data as any).isSampleData === null) adjUpdate.isSampleData = deleteField();
+        transaction.update(docRef, adjUpdate);
       })
     );
 
@@ -863,6 +871,216 @@ export async function getInventoryItem(
     return { id: snap.id, ...snap.data() } as InventoryItem;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, `${path}/${itemId}`);
+  }
+}
+
+// -------------------------------------------------------------
+// WHOLESALE / TECHNICIAN SPARE PARTS SALES
+// -------------------------------------------------------------
+
+export interface WholesaleSaleResult {
+  saleId: string;
+  billNumber: string;
+  stockChanges: {
+    itemId: string;
+    itemName: string;
+    previousQuantity: number;
+    newQuantity: number;
+    deducted: number;
+  }[];
+}
+
+export function subscribeWholesaleSales(
+  ownerId: string,
+  callback: (sales: WholesaleSale[]) => void,
+  onError?: (err: any) => void
+) {
+  if (!ownerId || ownerId === 'guest_owner') {
+    callback([]);
+    return () => {};
+  }
+  const path = 'wholesaleSales';
+  const q = collection(db, path);
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const sales: WholesaleSale[] = [];
+      snapshot.forEach((docSnap) => {
+        sales.push({ id: docSnap.id, ...docSnap.data() } as WholesaleSale);
+      });
+      sales.sort((a, b) => {
+        const dateCmp = (b.saleDate || '').localeCompare(a.saleDate || '');
+        if (dateCmp !== 0) return dateCmp;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+      callback(sales);
+    },
+    (error) => {
+      console.warn(`Firestore subscription notice [${path}]:`, error.message);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Records a wholesale/counter sale to a technician and atomically deducts
+ * every sold spare part's quantity from the `inventory` collection inside a
+ * single Firestore transaction.
+ */
+export async function recordWholesaleSale(
+  saleInput: WholesaleSaleInput,
+  ownerId: string = BUSINESS_OWNER_ID
+): Promise<WholesaleSaleResult> {
+  const validation = validateWholesaleSale(saleInput);
+  if (!validation.isValid) {
+    const firstError = Object.values(validation.errors).find(Boolean) || 'Invalid wholesale sale details.';
+    throw new Error(firstError);
+  }
+
+  const saleId = generateDocId('ws');
+  const datePart = saleInput.saleDate.replace(/-/g, '').slice(2);
+  const billNumber = `WS-${datePart}-${saleId.slice(-4).toUpperCase()}`;
+  const nowIso = new Date().toISOString();
+
+  const requestedByItem = new Map<string, number>();
+  for (const line of saleInput.items) {
+    requestedByItem.set(line.itemId, (requestedByItem.get(line.itemId) || 0) + line.quantity);
+  }
+
+  const normalizedItems = saleInput.items.map((line) => ({
+    itemId: line.itemId,
+    itemName: line.itemName.trim(),
+    category: line.category,
+    quantity: line.quantity,
+    unitPrice: Math.max(0, Number(line.unitPrice) || 0),
+    lineTotal: Math.max(0, Number(line.lineTotal) || 0),
+  }));
+
+  const totalUnits = normalizedItems.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const totalAmount = Math.max(0, Number(saleInput.totalAmount) || 0);
+
+  const saleDoc: WholesaleSale = {
+    id: saleId,
+    billNumber,
+    saleDate: saleInput.saleDate,
+    technicianName: saleInput.technicianName.trim(),
+    items: normalizedItems,
+    totalUnits,
+    subtotal,
+    isCustomTotal: Boolean(saleInput.isCustomTotal),
+    totalAmount,
+    paymentStatus: saleInput.paymentStatus,
+    ownerId,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  const trimmedPhone = saleInput.technicianPhone?.trim();
+  if (trimmedPhone) saleDoc.technicianPhone = trimmedPhone;
+  const trimmedNotes = saleInput.notes?.trim();
+  if (trimmedNotes) saleDoc.notes = trimmedNotes;
+  if (saleInput.isSampleData) saleDoc.isSampleData = true;
+
+  const stockChanges: WholesaleSaleResult['stockChanges'] = [];
+
+  try {
+    await withTimeout(
+      runTransaction(db, async (transaction) => {
+        stockChanges.length = 0;
+
+        const itemEntries = Array.from(requestedByItem.entries());
+        const snapshots = await Promise.all(
+          itemEntries.map(([itemId]) => transaction.get(doc(db, 'inventory', itemId)))
+        );
+
+        const updatesToApply: { itemId: string; newQuantity: number; invData: InventoryItem }[] = [];
+        for (let i = 0; i < itemEntries.length; i++) {
+          const [itemId, qtyNeeded] = itemEntries[i];
+          const snap = snapshots[i];
+          if (!snap.exists()) {
+            throw new Error(`Spare part "${itemId}" was not found in inventory.`);
+          }
+          const invData = snap.data() as InventoryItem;
+          const prevQty = Number(invData.quantity) || 0;
+          if (prevQty < qtyNeeded) {
+            throw new Error(
+              `Insufficient stock for "${invData.name}": ${prevQty} available, ${qtyNeeded} requested.`
+            );
+          }
+          const newQty = prevQty - qtyNeeded;
+          updatesToApply.push({ itemId, newQuantity: newQty, invData });
+          stockChanges.push({
+            itemId,
+            itemName: invData.name,
+            previousQuantity: prevQty,
+            newQuantity: newQty,
+            deducted: qtyNeeded,
+          });
+        }
+
+        for (const upd of updatesToApply) {
+          const invUpdate: Record<string, any> = {
+            quantity: upd.newQuantity,
+            updatedAt: nowIso,
+          };
+          if ((upd.invData as any).storageLocation === null) invUpdate.storageLocation = deleteField();
+          if ((upd.invData as any).notes === null) invUpdate.notes = deleteField();
+          if ((upd.invData as any).isSampleData === null) invUpdate.isSampleData = deleteField();
+          transaction.update(doc(db, 'inventory', upd.itemId), invUpdate);
+        }
+        transaction.set(doc(db, 'wholesaleSales', saleId), saleDoc);
+      })
+    );
+
+    const itemsSummary = stockChanges
+      .map((s) => `${s.deducted}x ${s.itemName} (${s.previousQuantity}->${s.newQuantity})`)
+      .join(', ');
+    recordAuditEvent(
+      'WHOLESALE_SALE_RECORDED',
+      `Bill ${billNumber} to ${saleDoc.technicianName} (Rs.${totalAmount}, ${saleDoc.paymentStatus}): ${itemsSummary}`,
+      'WholesaleSale',
+      saleId,
+      ownerId
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
+
+    return { saleId, billNumber, stockChanges };
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.startsWith('Insufficient stock') || err.message.includes('was not found in inventory'))
+    ) {
+      throw err;
+    }
+    handleFirestoreError(err, OperationType.WRITE, `wholesaleSales/${saleId}`);
+  }
+}
+
+export async function updateWholesaleSalePaymentStatus(
+  saleId: string,
+  paymentStatus: PaymentStatus,
+  ownerId: string = BUSINESS_OWNER_ID
+): Promise<void> {
+  const path = 'wholesaleSales';
+  const nowIso = new Date().toISOString();
+
+  try {
+    await withTimeout(
+      updateDoc(doc(db, path, saleId), {
+        paymentStatus,
+        updatedAt: nowIso,
+      })
+    );
+    recordAuditEvent(
+      'WHOLESALE_PAYMENT_UPDATED',
+      `Updated wholesale bill ${saleId} payment status to ${paymentStatus}`,
+      'WholesaleSale',
+      saleId,
+      ownerId
+    ).catch((e) => console.warn('Non-blocking audit log notice:', e));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${path}/${saleId}`);
   }
 }
 
