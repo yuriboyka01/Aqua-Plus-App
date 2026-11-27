@@ -60,9 +60,12 @@ app.use(createApiMiddleware());
 
 // Direct download route for the newly compiled Android APK
 app.get('/download/app.apk', (_req, res) => {
-  const apkPath = path.join(projectRoot, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-  if (fs.existsSync(apkPath)) {
-    res.download(apkPath, 'AquaPlus-Service.apk');
+  const releaseApkPath = path.join(projectRoot, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+  const debugApkPath = path.join(projectRoot, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+  if (fs.existsSync(releaseApkPath)) {
+    res.download(releaseApkPath, 'AquaPlus-Service.apk');
+  } else if (fs.existsSync(debugApkPath)) {
+    res.download(debugApkPath, 'AquaPlus-Service.apk');
   } else {
     // If not present in local build output, redirect to the latest GitHub release APK
     res.redirect(302, 'https://github.com/yuriboyka01/Aqua-Plus-App/releases/latest');

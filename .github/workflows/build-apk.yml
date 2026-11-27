@@ -65,11 +65,37 @@ jobs:
       - name: Sync Capacitor Android Assets
         run: npx cap sync android
 
-      - name: Assemble Debug APK with Gradle
+      - name: Configure Release Signing Keystore
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_B64" | tr -d '\r\n ' | base64 --decode > android/app/aquaplus-release.keystore
+            printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=aquaplus-release.keystore\n' \
+              "$STORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
+            echo "signed_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Release signing secrets (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD) are not configured. Falling back to debug APK; updates over previous installs will fail due to ephemeral debug keys."
+            echo "signed_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Android APK with Gradle
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          if [ "${{ steps.signing.outputs.signed_release }}" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon
+          else
+            ./gradlew assembleDebug --no-daemon
+          fi
+
+      - name: Cleanup Release Signing Files
+        if: always()
+        run: rm -f android/app/aquaplus-release.keystore android/key.properties
 
       - name: Stage APK Artifact with Version
         run: |
@@ -85,8 +111,13 @@ jobs:
           fi
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "RELEASE_TAG=$TAG_NAME" >> $GITHUB_ENV
-          cp android/app/build/outputs/apk/debug/app-debug.apk "AquaPlus-Service-${TAG_NAME}.apk"
-          echo "Generated APK: AquaPlus-Service-${TAG_NAME}.apk"
+          if [ "${{ steps.signing.outputs.signed_release }}" = "true" ]; then
+            APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
+          else
+            APK_SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          fi
+          cp "$APK_SRC" "AquaPlus-Service-${TAG_NAME}.apk"
+          echo "Generated APK: AquaPlus-Service-${TAG_NAME}.apk (from $APK_SRC)"
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4

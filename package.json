@@ -15,6 +15,7 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-aquaplus-service --config firebase.emulator.json \"npm run test:rules:run\"",
     "cap:sync": "npm run build && cap sync android",
     "cap:build": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
+    "cap:build:release": "npm run cap:sync && cd android && gradlew.bat assembleRelease",
     "cap:open": "cap open android",
     "build:apk": "npm run build && cap sync android",
     "prepare": "git config core.hooksPath .githooks || true"
